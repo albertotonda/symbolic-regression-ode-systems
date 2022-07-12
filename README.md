@@ -8,4 +8,4 @@ I need several scripts and functions:
 3. Run separate instances of pySR on each equation, obtaining several Pareto fronts of candidate solutions.
 4. Pair equations found by pySR, converting them back to their original dx/dt format (ODE systems).
 5. Identify parameters inside the ODE systems, and optimize them using CMA-ES against the original data.
-6. Return the best equation.
+6. Return the best ODE system.
