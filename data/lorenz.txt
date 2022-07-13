@@ -1,0 +1,6 @@
+dx/dt = 10 * (y - x)
+dy/dt = x * (28 - z) - y
+dz/dt = x * y - 2.66666666666667 * z
+initial_conditions: x=1 y=10 z=5
+time_step: 0.01
+maximum_time: 33

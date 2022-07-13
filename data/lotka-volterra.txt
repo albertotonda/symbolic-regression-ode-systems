@@ -1,0 +1,5 @@
+dx/dt = 0.04 * x - 0.0005 * x * y
+dy/dt = -0.2 * y + 0.004 * x * y
+initial_conditions: x=20 y =   20
+time_step: 0.1
+maximum_time: 1000

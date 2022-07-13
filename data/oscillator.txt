@@ -1,0 +1,6 @@
+dx/dt = y + x - x**3/3 
+dy/dt = 0.65432 * cos(-3.14181 * z) - x
+dz/dt = 0.01
+initial_conditions: x=20 y=20 z=20
+time_step: 0.001 
+maximum_time: 100
