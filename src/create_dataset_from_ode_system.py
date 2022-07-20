@@ -208,8 +208,10 @@ def main() :
     df = pd.DataFrame.from_dict(df_dictionary)
     df.to_csv(os.path.join(output_folder, ode_system_name + ".csv"))
 
-    # some plots!
+    # some plots! (using seaborn for aesthetics)
     import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set_theme()
 
     # all variables vs time
     fig = plt.figure()
@@ -224,6 +226,34 @@ def main() :
 
     plt.savefig(os.path.join(output_folder, ode_system_name + ".png"), dpi=300) 
     plt.close(fig)
+
+    # some more plots! if we have two variables, we can try a 2D plot
+    if len(ordered_variables) == 2 :
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+        ax.plot(df[ordered_variables[0]], df[ordered_variables[1]])
+
+        ax.set_title(ode_system_name)
+        ax.set_xlabel(ordered_variables[0])
+        ax.set_ylabel(ordered_variables[1])
+
+        plt.savefig(os.path.join(output_folder, ode_system_name + "-2D-plot.png"), dpi=300) 
+        plt.close(fig)
+
+    # otherwise, we could go for a 3D plot
+    elif len(ordered_variables) == 3 :
+        from mpl_toolkits.mplot3d import Axes3D
+
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+
+        plt.plot(df[ordered_variables[0]], df[ordered_variables[1]], df[ordered_variables[2]])
+
+        plt.savefig(os.path.join(output_folder, ode_system_name + "-3D-plot.png"), dpi=300) 
+        plt.close(fig)
+
 
     return
 
