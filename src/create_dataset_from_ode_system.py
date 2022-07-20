@@ -1,10 +1,41 @@
+"""
+This script parses text or JSON information with an ODE system and
+some initial conditions, solves the system and saves the data as a
+CSV. There is no error control, so input data in the wrong format
+will make it crash.
+"""
+import json
 import re
 import sympy
 import sys
 
 def parse_ode_from_json(file_name) :
 
-    return
+    # read the JSON file
+    dictionary = dict()
+    with open(file_name, "r") as fp : 
+        dictionary = json.load(fp)
+
+    # some data structures that will be used later
+    equations = dict()
+    initial_conditions = dict()
+    ordered_variables = []
+
+    # parse the equations in the ODE system
+    for variable, equation in dictionary["ode_system"].items() :
+
+            matches = re.match('d([A-Za-z0-9_]+)/dt', variable)
+            variable_name = matches.group(1)
+            equations[variable_name] = sympy.sympify(equation)
+
+            ordered_variables.append(variable_name)
+
+    # parse initial conditions
+    for variable, initial_condition in dictionary["initial_conditions"].items() :
+        initial_conditions[variable] = initial_condition
+
+    # and final details
+    return equations, initial_conditions, dictionary["time_step"], dictionary["max_time"]
 
 def parse_ode_from_text(file_name) :
 
@@ -69,21 +100,21 @@ def main() :
 
     # parse arguments
     parser = argparse.ArgumentParser(description='Python script to create dataset files, starting from a text description of a dynamic system + initial conditions. By Alberto Tonda, 2022 <alberto.tonda@inrae.fr>')
-    parser.add_argument("--input", metavar="system.txt", type=str, nargs=1, help="input file; format:\ndX_1/dt = <equation>.\ndX_2/dt = <quation>\n...\ndX_n/dt = <equation>\ninitial_conditions: X_1=x1 X_2=x2 ... X_n=xN\ntime_step: 0.1 <optional>i\nmax_time: 100", required=True)
+    parser.add_argument("--system", metavar="system.txt", type=str, nargs=1, help="input file; format:\ndX_1/dt = <equation>.\ndX_2/dt = <quation>\n...\ndX_n/dt = <equation>\ninitial_conditions: X_1=x1 X_2=x2 ... X_n=xN\ntime_step: 0.1 <optional>i\nmax_time: 100", required=True)
     args = parser.parse_args()
 
     # get the new file name
-    path, ode_file_name = os.path.split(args.input[0])
+    path, ode_file_name = os.path.split(args.system[0])
     dataset_file_name = ode_file_name[:-4] + "-dataset.csv"
 
     print("I am going to read file \"%s\" and write to file \"%s\"..." % (ode_file_name, dataset_file_name))
 
     # check if the file ends with ".txt" or ".json"
-    if args.input[0].endswith(".txt") :
-        equations, initial_conditions, time_step, max_time = parse_ode_from_text(args.input[0])
+    if args.system[0].endswith(".txt") :
+        equations, initial_conditions, time_step, max_time = parse_ode_from_text(args.system[0])
 
-    elif args.input[0].endswith(".json") :
-        parse_ode_from_json(args.input[0])
+    elif args.system[0].endswith(".json") :
+        equations, initial_conditions, time_step, max_time = parse_ode_from_json(args.system[0])
 
     else :
         print("The file for the ODE system should be in either .txt or .json format. Aborting...")

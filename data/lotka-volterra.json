@@ -10,5 +10,5 @@
 		"y" : 20
 	},
 	"time_step" : 0.1,
-	"maximum_time": 1000
+	"max_time": 1000
 }
