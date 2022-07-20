@@ -11,4 +11,5 @@ I need several scripts and functions:
 6. Return the best ODE system.
 
 ## TODO
-- Creating a conda environment with everything included seems to be super painful. Either I installed pySR, or all the other packages.
+- Next step: create the modified dataset.
+- Creating a conda environment with everything included seems to be super painful. Either I installed pySR, or all the other package. At the moment, environment (srode) seems to work. Fingers crossed.
