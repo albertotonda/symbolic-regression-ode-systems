@@ -27,10 +27,7 @@ def apply_euler_method(df, delta_t=1) :
     # NOTE: it could be sped up using np arrays, I could evaluate
     # the size of the arrays before creating them, but at the moment
     # it's not really a blocking issue
-
-    # we start from index 1, because we always need to compute the
-    # difference between a value and the same value in the previous row
-    for index in range(1, df.shape[0]) :
+    for index in range(0, df.shape[0]) :
 
         # set time values that we will need to compute the Euler method
         next_time = 0
