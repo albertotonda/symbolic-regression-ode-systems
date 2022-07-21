@@ -10,6 +10,10 @@ I need several scripts and functions:
 5. Identify parameters inside the ODE systems, and optimize them using CMA-ES against the original data.
 6. Return the best ODE system.
 
+Ideally, a lot of experiments can be run, changing:
+- noise applied to the data
+- regular/irregular sampling
+
 ## TODO
 - Next step: create the modified dataset.
 - Creating a conda environment with everything included seems to be super painful. Either I installed pySR, or all the other package. At the moment, environment (srode) seems to work. Fingers crossed.

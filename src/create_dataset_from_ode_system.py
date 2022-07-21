@@ -206,7 +206,7 @@ def main() :
         df_dictionary[ordered_variables[j]] = [ Y[i][j] for i in range(0, len(Y)) ]
 
     df = pd.DataFrame.from_dict(df_dictionary)
-    df.to_csv(os.path.join(output_folder, ode_system_name + ".csv"))
+    df.to_csv(os.path.join(output_folder, ode_system_name + ".csv"), index=False)
 
     # some plots! (using seaborn for aesthetics)
     import matplotlib.pyplot as plt
