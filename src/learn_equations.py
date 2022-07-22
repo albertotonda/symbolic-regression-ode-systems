@@ -117,7 +117,8 @@ def main() :
         # new dictionary with the pruned equations
         pruned_equations = dict()
         for var, eqs in equations.items() :
-            pruned_equations[var] = prune_equations(eqs)
+            if var.startswith("F_") :
+                pruned_equations[var[2:]] = prune_equations(eqs)
         print("Pruned equations:", pruned_equations)
 
         # build the systems of differential equations, using the 'itertools' package
