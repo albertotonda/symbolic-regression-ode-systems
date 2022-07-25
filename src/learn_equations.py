@@ -5,7 +5,7 @@ import pandas as pd
 import sys
 
 from pysr import PySRRegressor
-from sympy import simplify, symbols
+from sympy import diff, simplify, symbols
 from sympy.parsing.sympy_parser import parse_expr
 
 def learn_equations(df) :
@@ -24,11 +24,13 @@ def learn_equations(df) :
 
         # instantiate pySR regressor
         model = PySRRegressor(
-            procs=4,
+            procs=7,
             populations=8,
             population_size=50,
+            batching=True, # use batches instead of the whole dataset
+            batch_size=50, # 50 is the default value for the batches
             model_selection="best",  # Result is mix of simplicity+accuracy
-            niterations=40,
+            niterations=80,
             binary_operators=["+", "*", "/", "-"],
             unary_operators=[
             "cos",
@@ -54,8 +56,8 @@ def learn_equations(df) :
 
 def prune_equations(equations) :
     """
-    Taking in input an iterable (list or dataframe, probably) of symbolic equations, sets delta_t to zero and then
-    removes all duplicates and all equations that are equal to zero.
+    Taking in input an iterable (list or dataframe, probably) of symbolic equations, performs derivation for delta_t, 
+    set delta_t to zero and then removes all duplicates and all equations that are equal to zero.
     """
 
     equations_replaced = []
@@ -63,11 +65,18 @@ def prune_equations(equations) :
     # create symbol for "delta_t"
     delta_t = symbols("delta_t") 
 
-    # set delta_t to zero
+    # derivate for delta_t, then set remaining delta_t to zero
     for eq in equations :
-        equations_replaced.append( eq.subs(delta_t, 0) )
+       
+        # derivate
+        eq_diff = diff(eq, delta_t) 
+
+        # replace any remaining delta_t with 0
+        equations_replaced.append( eq_diff.subs(delta_t, 0) )
 
     # prune/remove all duplicates and equations that reduce to constants
+    # TODO  to further reduce the number of equations, I could try to replace numerical parameters with variables,
+    #       but then, it's still hard to find stuff.
     pruned_equations = []
     for i_1, eq_1 in enumerate(equations_replaced) :
 
@@ -118,12 +127,13 @@ def main() :
         pruned_equations = dict()
         for var, eqs in equations.items() :
             if var.startswith("F_") :
-                pruned_equations[var[2:]] = prune_equations(eqs)
+                pruned_equations["d" + var[2:] + "/dt"] = prune_equations(eqs)
         print("Pruned equations:", pruned_equations)
 
         # build the systems of differential equations, using the 'itertools' package
         # but before that, we will need to create a list of lists (TODO and store the fact that we are deriving?)
         equations_list = [ eqs for var, eqs in pruned_equations.items() ]
+        variables_list = [ var for var, eqs in pruned_equations.items() ]
 
         import itertools
         ode_systems = list(itertools.product(*equations_list))
@@ -131,6 +141,19 @@ def main() :
         print("Resulting candidate ODE systems:")
         print(ode_systems)
 
+        print("Saving ODE systems to disk:")
+        # get path of the original CSV dataset
+        original_path, original_csv = os.path.split(args.csv[0]) 
+
+        for index, system in enumerate(ode_systems) :
+
+            text = ""
+            for i in range(0, len(system)) :
+                text += str(variables_list[i]) + " = "
+                text += str(system[i]) + "\n"
+
+            with open(os.path.join(original_path, "candidate_system_%d.txt" % index), "w") as fp :
+                fp.write(text)
 
     return
 
