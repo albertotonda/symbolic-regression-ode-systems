@@ -1,8 +1,11 @@
 """
 Functions to replace fixed values with parameters, and optimize them, in ODE systems.
 """
+import cma
 import sys
 import sympy
+
+from scipy import integrate
 
 def parametrize_expressions(expressions) :
     """
@@ -28,10 +31,42 @@ def parametrize_expressions(expressions) :
 
 def optimize_ode_parameters(expressions, initial_values, df_train) :
     """
-    Optimize parameters of an ODE system using CMA-ES
+    Optimize parameters of an ODE system using CMA-ES. We could start from the assumption that the actual values will not be too far away from the
+    parameters found by the symbolic regression, to limit the search space.
     """
 
+    # get variables, in order
+    variables = [v for v, e in expressions.items()]
+
+    # get initial conditions for solving the differential equation
+    initial_conditions = [df[v].values[0] for v in variables]
+
+    # get array of time values
+    t = df["t"].values
+
+    # get all initial values of parameters in the expressions; as of Python 3.7, dictionaries preserve the order of insertion of keys
+    # so we can just iterate and store values for the starting point of the search
+    x_0 = [v for p, v in initial_values.items()]
+
+    # the fitness function takes the symbolic expressions, replaces
+    # the symbolic parameters with the (candidate optimal) values,
+    # and solves the resulting system as an ODE system
+    # TODO remember, odeint can deliver extra parameters to the fitness function
+
     return best_values
+
+def dX_dt(X_local, t_local, equations : dict, symbols : list) :
+    """
+    Function that is used to solve the differential equation 
+    """
+    # create dictionary symbol -> value (order of symbols is important!)
+    symbols_to_values = {s: X_local[i] for i, s in enumerate(symbols)}
+    symbols_to_values['t'] = t_local
+
+    # compute values, evaluating the symbolic functions after replacement
+    values = [ eq.evalf(subs=symbols_to_values) for var, eq in equations.items() ]
+
+    return values
 
 def main() :
 
@@ -63,6 +98,39 @@ def main() :
             equations[match.group(1)] = parse_expr(tokens[1])
 
         print(equations)
+
+        # let's try to integrate the function
+        variables = [ v for v, e in equations.items() ]
+        initial_conditions = [ df[v].values[0] for v in variables ]
+        t = df["t"].values
+        Y, info_dict = integrate.odeint(dX_dt, initial_conditions, t, args=(equations, variables, ), full_output=True)
+
+        # plot(s)? just to see what happens
+        import matplotlib.pyplot as plt
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+        # measured values
+        ax.plot(df[variables[0]].values, df[variables[1]].values, 'g-', label="Original values")
+        ax.plot(Y[:,0], Y[:,1], 'r-', label="Predicted values")
+
+        ax.set_xlabel(variables[0])
+        ax.set_ylabel(variables[1])
+        ax.set_title("ODE system %d" % i)
+        ax.legend(loc='best')
+
+        plt.savefig(file_system[:-4] + ".png", dpi=300)
+        plt.close(fig)
+
+        for i, v in enumerate(variables) :
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+
+            ax.plot(t, Y[:,i], 'r-', label="Predicted values")
+            ax.plot(t, df[v].values, 'g-', label="Original values")
+
+            plt.savefig(file_system[:-4] + ".png", dpi=300)
+            plt.close(fig)
         
         # parametrize functions
         parametrized_expressions, initial_values = parametrize_expressions(equations)
@@ -70,9 +138,7 @@ def main() :
         print(initial_values)
 
         # optimize parameters
-
-
-        sys.exit(0)
+        #sys.exit(0)
 
     return
 
