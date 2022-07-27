@@ -15,5 +15,6 @@ Ideally, a lot of experiments can be run, changing:
 - regular/irregular sampling
 
 ## TODO
-- Next step: create the modified dataset.
+- Next step: build the systems to be optimized. 
+- Also store the random seeds for each experiment.
 - Creating a conda environment with everything included seems to be super painful. Either I installed pySR, or all the other package. At the moment, environment (srode) seems to work. Fingers crossed.

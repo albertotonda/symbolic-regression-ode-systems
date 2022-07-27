@@ -30,7 +30,7 @@ def learn_equations(df) :
             batching=True, # use batches instead of the whole dataset
             batch_size=50, # 50 is the default value for the batches
             model_selection="best",  # Result is mix of simplicity+accuracy
-            niterations=80,
+            niterations=1000,
             binary_operators=["+", "*", "/", "-"],
             unary_operators=[
             "cos",
