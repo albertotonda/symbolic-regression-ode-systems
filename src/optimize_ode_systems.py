@@ -2,6 +2,7 @@
 Functions to replace fixed values with parameters, and optimize them, in ODE systems.
 """
 import cma
+import numpy
 import sys
 import sympy
 
@@ -136,6 +137,9 @@ def main() :
         parametrized_expressions, initial_values = parametrize_expressions(equations)
         print(parametrized_expressions)
         print(initial_values)
+        
+        mse = ((Y - df[variables].values)**2).mean(axis=0).mean(axis=0)
+        print("MSE:", mse)
 
         # optimize parameters
         #sys.exit(0)
