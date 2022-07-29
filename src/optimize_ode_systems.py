@@ -30,31 +30,36 @@ def parametrize_expressions(expressions) :
 
     return parametrized_expressions, initial_values
 
-def optimize_ode_parameters(expressions, initial_values, df_train) :
+def optimize_ode_parameters(equations, initial_values, df_train) :
     """
     Optimize parameters of an ODE system using CMA-ES. We could start from the assumption that the actual values will not be too far away from the
     parameters found by the symbolic regression, to limit the search space.
     """
 
     # get variables, in order
-    variables = [v for v, e in expressions.items()]
+    variables = [v for v, e in equations.items()]
 
     # get initial conditions for solving the differential equation
-    initial_conditions = [df[v].values[0] for v in variables]
+    initial_conditions = [df_train[v].values[0] for v in variables]
 
     # get array of time values
-    t = df["t"].values
+    t = df_train["t"].values
 
     # get all initial values of parameters in the expressions; as of Python 3.7, dictionaries preserve the order of insertion of keys
     # so we can just iterate and store values for the starting point of the search
     x_0 = [v for p, v in initial_values.items()]
+    parameter_names = [p for p, v in initial_values.items()]
+
+    # initialize CMA-ES optimization algorithm
+    es = cma.CMAEvolutionStrategy(x_0, 1e-2, {'popsize': 100})
 
     # the fitness function takes the symbolic expressions, replaces
     # the symbolic parameters with the (candidate optimal) values,
     # and solves the resulting system as an ODE system
-    # TODO remember, odeint can deliver extra parameters to the fitness function
+    es.optimize(fitness_function, args=(parameter_names, equations, variables, df_train))
+    best_parameter_values = es.result[0]
 
-    return best_values
+    return best_parameter_values
 
 def dX_dt(X_local, t_local, equations : dict, symbols : list) :
     """
@@ -68,6 +73,30 @@ def dX_dt(X_local, t_local, equations : dict, symbols : list) :
     values = [ eq.evalf(subs=symbols_to_values) for var, eq in equations.items() ]
 
     return values
+
+def fitness_function(parameter_values, parameter_names, equations : dict, variables : list, df) :
+    """
+    Computes the mean squared error between the data and the system solved with the parameters.
+    """
+    # create dictionary to later replace parameters with their values
+    replacement_dictionary = { parameter_names[i] : parameter_values[i] for i in range(len(parameter_names)) }
+
+    # replace symbolic parameters with their local (candidate) values
+    local_equations = {}
+    for var, eq in equations.items() :
+        local_equations[var] = equations[var].subs(replacement_dictionary)
+
+    # solve the system for the initial conditions 
+    initial_conditions = [ df[v].values[0] for v in variables ]
+    t = df["t"].values
+    Y, info_dict = integrate.odeint(dX_dt, initial_conditions, t, args=(local_equations, variables, ), full_output=True)
+
+    # TODO some checks in case of errors or horrible values
+    
+    # compute the mean squared error
+    mse = ((Y - df[variables].values)**2).mean(axis=0).mean(axis=0)
+
+    return mse
 
 def main() :
 
@@ -142,7 +171,10 @@ def main() :
         print("MSE:", mse)
 
         # optimize parameters
-        #sys.exit(0)
+        print("Now optimizing parameters...")
+        best_parameter_values = optimize_ode_parameters(parametrized_expressions, initial_values, df)
+
+        sys.exit(0)
 
     return
 
