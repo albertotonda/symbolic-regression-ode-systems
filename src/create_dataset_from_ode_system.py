@@ -7,6 +7,8 @@ will make it crash.
 import importlib
 import json
 import numpy as np
+import os
+import pandas as pd
 import re
 import sympy
 import sys
@@ -125,30 +127,55 @@ def solve_ode_system(ordered_variables, initial_conditions, time_step, max_time,
     # dinamically import the temporary module (hopefully) containing the ODE system
     ode = importlib.import_module(module_name)
 
-    #Y = np.zeros((int(max_time * time_step + 1), len(ordered_variables))) # output
-    Y = [] # output
-    time = [] # time array
+    # total number of values that we will obtain through integration
+    size = int(max_time / time_step + 1)
+    Y = np.zeros((size, len(ordered_variables))) # output
+    time = np.zeros(size) # time array
 
-    # setup
-    #for i in range(0, len(ordered_variables)) :
-    #    Y[0,i] = initial_conditions[ordered_variables[i]]
-    Y.append( [initial_conditions[v] for v in ordered_variables] )
-    time.append(0)
-
+    # setup, storing values of the initial conditions for time=0.0
+    for i in range(0, len(ordered_variables)) :
+        Y[0,i] = initial_conditions[ordered_variables[i]]
+    time[0] = 0.0
+    
     r = integrate.ode(ode.dX_dt).set_integrator('dopri5')
     r.set_initial_value(Y[0], time[0])
 
     index = 1
     while r.successful() and r.t < max_time :
         r.integrate(r.t + time_step, step=True)
-        #Y[index] = r.y
-        Y.append(r.y)
-        time.append(r.t)
+        Y[index,:] = r.y
+        time[index] = r.t
 
-        index += 1
+        index += 1 
 
     return Y, time
+
+def get_df_from_ode_system(equations, ordered_variables, initial_conditions, time_step, max_time) :
+    """
+    Gets data integrating an ODE system given the system in symbolic form, 
+    initial conditions, time step, and all that jazz.
+    """
+    temp_file_name = "temp.py"
     
+    # unfortunately I still have not found a better way to perform the integration
+    # so I need to write a temporary file, import it, run it and then delete it
+    write_temp_ode_system(equations, ordered_variables, temp_file_name)
+    
+    # solve the system get the data
+    Y, t = solve_ode_system(ordered_variables, initial_conditions, time_step, max_time, temp_file_name[:-3])
+    
+    # delete temporary file
+    if os.path.exists(temp_file_name) :
+        os.remove(temp_file_name)
+    
+    # store data inside a dictionary
+    df_dictionary = {ordered_variables[j] : Y[:,j] for j in range(0, len(ordered_variables))}
+    df_dictionary["t"] = t
+    
+    # convert the dictionary with the data to a pandas DataFrame object
+    df = pd.DataFrame.from_dict(df_dictionary)
+    
+    return df
 
 def main() :
 
@@ -160,8 +187,16 @@ def main() :
 
     # parse arguments
     parser = argparse.ArgumentParser(description='Python script to create dataset files, starting from a text description of a dynamic system + initial conditions. By Alberto Tonda, 2022 <alberto.tonda@inrae.fr>')
-    parser.add_argument("--system", metavar="system.txt", type=str, nargs=1, help="input file; format:\ndX_1/dt = <equation>.\ndX_2/dt = <quation>\n...\ndX_n/dt = <equation>\ninitial_conditions: X_1=x1 X_2=x2 ... X_n=xN\ntime_step: 0.1 <optional>i\nmax_time: 100", required=True)
+    parser.add_argument("--system", metavar="system.txt", type=str, nargs=1, 
+                        help="input file; format:\ndX_1/dt = <equation>.\ndX_2/dt = <equation>\n...\ndX_n/dt = <equation>\ninitial_conditions: X_1=x1 X_2=x2 ... X_n=xN\ntime_step: 0.1 <optional>i\nmax_time: 100", 
+                        required=False)
     args = parser.parse_args()
+    
+    if args.system is None :
+        args.system = ["../data/lotka-volterra.json"]
+        print("--system option should be specified on command line. Proceeding with default (\"%s\") value for debugging..." %
+              args.system[0])
+
 
     # get the new file name
     path, ode_file_name = os.path.split(args.system[0])
@@ -258,4 +293,12 @@ def main() :
     return
 
 if __name__ == "__main__" :
-    sys.exit( main() )
+    
+    # normally I should call the main here, but let's try some debugging
+    #sys.exit( main() )
+    
+    ode_system_file_name = "../data/lotka-volterra.txt"
+    equations, ordered_variables, initial_conditions, time_step, max_time = parse_ode_from_text(ode_system_file_name)
+    df = get_df_from_ode_system(equations, ordered_variables, initial_conditions, time_step, max_time)
+    
+    df.to_csv("lotka-volterra.csv", index=False)

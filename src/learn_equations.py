@@ -24,19 +24,15 @@ def learn_equations(df) :
 
         # instantiate pySR regressor
         model = PySRRegressor(
-            procs=7,
-            populations=8,
+            #procs=7, # commenting this should make it use all processors
+            populations=15,
             population_size=50,
             batching=True, # use batches instead of the whole dataset
             batch_size=50, # 50 is the default value for the batches
             model_selection="best",  # Result is mix of simplicity+accuracy
             niterations=1000,
             binary_operators=["+", "*", "/", "-"],
-            unary_operators=[
-            "cos",
-            "exp",
-            "sin",
-            ],
+            unary_operators=["sin", "cos", "exp", "log"],
         )
 
         # create training dataset (it can be a DataFrame, which also removes the necessity of specifying the variable names!)
@@ -96,7 +92,36 @@ def prune_equations(equations) :
 
     return pruned_equations
 
+def do_expressions_have_same_structure(exp1, exp2) :
+    """
+    This should check whether two mathematical symbolic expression share the same
+    'structure', as in, they are the same minus the values of the numerical parameters.
+    The tricky part is that sometimes 2*x and x are internally represented differently:
+    they should be 2*x and 1*x, but actually they are Mul(2,x) and just x.
+    So, the way of doing this is to visit the tree, and every time there is a leaf
+    containing a variable (or two) and the leaf is NOT part of a subtree made
+    entirely of multiplications that also contains a Numerical symbol, we need
+    to replace the leaf variable x with a Mul(p,x) subtree. This might be further
+    complicated if there are polynomes like x*y*z, they should become p*x*y*z
+    """    
+    
+    return False
+
 def main() :
+    
+    # debugging, this should really not be executed
+    if True :
+        # this is just used for debugging
+        df_X = pd.read_csv("equations-F_x.csv")
+        
+        # get the list of equations in string format
+        equations = [ parse_expr(eq) for eq in df_X["equation"].values ]
+        print(equations)
+        
+        pruned_equations = prune_equations(equations)
+        print("Equations after pruning:")
+        print(pruned_equations)
+        
 
     if False :
         # this is just brutal testing for pruning
@@ -107,7 +132,7 @@ def main() :
         print("Equations after pruning:")
         print(pruned_equations)
 
-    if True :
+    if False :
         # local imports, used only in the main
         import argparse
         import os
