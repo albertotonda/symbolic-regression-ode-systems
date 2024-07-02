@@ -17,7 +17,7 @@ from create_dataset_from_ode_system import get_df_from_ode_system, parse_ode_fro
 from explicit_euler_method import apply_euler_method
 from learn_equations import prune_equations
 from optimize_ode_systems import dX_dt
-from local_utility import MyTimeoutError, timeout_func
+from local_utility import MyTimeoutError, timeout, timeout_func
 
 
 if __name__ == "__main__" :
@@ -30,6 +30,7 @@ if __name__ == "__main__" :
     import shutil
     import sys
     
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
     from sklearn.metrics import mean_squared_error, r2_score
     
     # this is just a test with Lotka-Volterra
@@ -49,6 +50,7 @@ if __name__ == "__main__" :
         print("Found folder \"%s\", resuming from files inside..." % results_folder)
     else :
         print("Creating new folder for the experiment, \"%s\"..." % results_folder)
+        os.mkdir(results_folder)
         
     # copy the original file inside the folder, if it is not there yet
     destination_ode_system_file_name = os.path.join(results_folder, os.path.basename(ode_system_file_name))
@@ -68,6 +70,8 @@ if __name__ == "__main__" :
     else :
         print("File with data from ODE system found, loading it and skipping to the next step...")
         df_ode = pd.read_csv(solved_ode_file_name)
+        
+    # TODO split data between train, validation, and test
         
     # 3. check if inside the experiment folder there is already a CSV file with
     # the data modified with the explicit Euler method; if so, skip
@@ -91,7 +95,7 @@ if __name__ == "__main__" :
         target_equations_file_name = os.path.join(results_folder, "equations-%s.csv" % target)
         target_regressor_file_name = os.path.join(results_folder, "regressor-%s.pkl" % target)
         
-        if not os.path.exists(target_equations_file_name) :
+        if not os.path.exists(target_equations_file_name) or not os.path.exists(target_regressor_file_name) :
             print("Now running symbolic regression for variable \"%s\"..." % target)
             
             # create dataframes with selection: TODO split data? cross-validation?
@@ -120,16 +124,16 @@ if __name__ == "__main__" :
             dictionary_equations[target] = symbolic_regressor.equations
             
             # also store the regressor objects in the dictionary and save them as pickles
-            #dictionary_regressors[target] = symbolic_regressor
-            #with open(target_regressor_file_name, "wb") as fp :
-            #   pickle.dump(symbolic_regressor, fp)
+            dictionary_regressors[target] = symbolic_regressor
+            with open(target_regressor_file_name, "wb") as fp :
+               pickle.dump(symbolic_regressor, fp)
             
         else :
             print("File with equations for target \"%s\" found, reading it and skipping to the next step..."
                   % target)
             dictionary_equations[target] = pd.read_csv(target_equations_file_name)
-            #with open(target_regressor_file_name, "rb") as fp :
-            #   dictionary_regressors[target] = pickle.load(fp)
+            with open(target_regressor_file_name, "rb") as fp :
+               dictionary_regressors[target] = pickle.load(fp)
             
     # 5. at this point, we need to "prune" the equations; we first derivate each
     # in "delta_t", then set "delta_t=0" and remove the copies
@@ -157,7 +161,7 @@ if __name__ == "__main__" :
                   % target)
             df_pruned_equations = pd.read_csv(pruned_equations_file_name)
             dictionary_pruned_equations[variable_name] = df_pruned_equations["equation"].values.tolist()
-            
+    
     # 6. next step: the pruned equations are paired to recreate candidate ODE systems
     # as text files, that will be later read to optimize their parameters
     equations_list = [ equations for variable, equations in dictionary_pruned_equations.items() ]
@@ -180,6 +184,20 @@ if __name__ == "__main__" :
             
             with open(system_file_name, "w") as fp :
                 fp.write(system_text)
+                
+    # 6b. however, we could also check what is the default equation picked by PySRRegressor
+    # for each state variable, building a candidate ODE system with just the best
+    candidate_system_default_equations = []
+    candidate_system_default_equations_text = ""
+    for target in target_names :
+        eq = prune_equations([dictionary_regressors[target].sympy()])[0]
+        candidate_system_default_equations.append(eq)
+        
+        candidate_system_default_equations_text += "d" + target[2:] + "/dt" + " = "
+        candidate_system_default_equations_text += str(eq) + "\n"
+    
+    with open(os.path.join(results_folder, "candidate_default_equations.txt"), "w") as fp :
+        fp.write(candidate_system_default_equations_text)
     
     # 7. now, it could be interesting to run the systems agains the original
     # data, just to check what is their original performance, and which one
@@ -195,7 +213,6 @@ if __name__ == "__main__" :
         t = df_ode["t"].values
         measured_values = df_ode[variables_list].values
         
-        # TODO this part could be parallelized using a ThreadPool
         # now, let's iterate over the candidate ODE systems
         for index, candidate_ode_system in enumerate(candidate_ode_systems) :
             
@@ -211,29 +228,72 @@ if __name__ == "__main__" :
             #                                args=(candidate_equations, variables_list, ), 
             #                                full_output=True)
             
-            try :
-                Y, info_dict = timeout_func(integrate.odeint, args=(dX_dt, initial_conditions, t),
-                                            kwargs={'args' : (candidate_equations, variables_list, ), 'full_output' : True},
-                                            timeout=60) # 60 seconds timeout
-                
-                # compute performance
+            # this line below employs a decorator to manage the timeout
+            # but this also does not work! sometimes Windows just kills the whole
+            # thing with a mysterious "Windows fatal exception: access violation"
+            #func = timeout(60)(integrate.odeint)
+            
+            # as a THIRD ATTEMPT, let's try to use joblib with a temporary function
+            # nope, apparently the SequentialBackend does not make it possible to use
+            # timeout;
+            
+            # prepare function
+            args = (dX_dt, initial_conditions, t)
+            kwargs = {'args' : (candidate_equations, variables_list, ),
+                      'full_output' : True}
+            
+            # FOURTH ATTEMPT: concurrent.futures
+            result = None
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(integrate.odeint, *args, **kwargs)
+                try :
+                    result = future.result(timeout=60)
+                except TimeoutError :
+                    print("Timeout exceeded.")
+                except Exception as e :
+                    print("Exception:" + str(e))
+            
+            # these are the default values that will be used in case of errors
+            candidate_mse = sys.float_info.max
+            candidate_r2 = -sys.float_info.max
+            
+            if result is not None :
+                Y, info_dict = result
                 candidate_mse = mean_squared_error(measured_values, Y)
                 candidate_r2 = r2_score(measured_values, Y)
             
-            except MyTimeoutError as ex:
-                print("Timeout exception: " + str(ex))
-                # in case of an error, we just use horrible values for the performance metrics
-                candidate_mse = sys.float_info.max
-                candidate_r2 = -sys.float_info.max
+            #try :
+                # this is using a wrapper for the timeout; but on Windows, it 
+                #shows an incoherent behavior. Let's try with a decorator
+                #Y, info_dict = timeout_func(integrate.odeint, args=(dX_dt, initial_conditions, t),
+                #                            kwargs={'args' : (candidate_equations, variables_list, ), 
+                #                                    'full_output' : True},
+                #                            timeout=60) # 60 seconds timeout
+                
+                # this is using the decorator
+            #    Y, info_dict = func(dX_dt, initial_conditions, t, 
+                #                                args=(candidate_equations, variables_list, ), 
+                #                                full_output=True)
+                
+                # compute performance
+            #    candidate_mse = mean_squared_error(measured_values, Y)
+            #    candidate_r2 = r2_score(measured_values, Y)
+            
+            #except Exception as ex:
+            #    print("Exception: " + str(ex))
+            #    # in case of an error, we just use horrible values for the performance metrics
+            #    candidate_mse = sys.float_info.max
+            #    candidate_r2 = -sys.float_info.max
             
             # add information to the dictionary
-            dictionary_unoptimized_candidate_performances["system_id"] = index
-            dictionary_unoptimized_candidate_performances["MSE"] = candidate_mse
-            dictionary_unoptimized_candidate_performances["R2"] = candidate_r2
+            dictionary_unoptimized_candidate_performances["system_id"].append(index)
+            dictionary_unoptimized_candidate_performances["MSE"].append(candidate_mse)
+            dictionary_unoptimized_candidate_performances["R2"].append(candidate_r2)
             
             print("Candidate %d, R2=%.4f" % (index, candidate_r2))
             
         # save the results to a file, sorted by the best performance
+        print(dictionary_unoptimized_candidate_performances)
         df_initial_performance = pd.DataFrame.from_dict(dictionary_unoptimized_candidate_performances)
         df_initial_performance.sort_values(by="MSE", inplace=True)
         df_initial_performance.to_csv(candidates_initial_performance_file_name, index=False)
