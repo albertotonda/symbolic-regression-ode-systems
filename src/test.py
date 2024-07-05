@@ -17,13 +17,14 @@ from create_dataset_from_ode_system import get_df_from_ode_system, parse_ode_fro
 from explicit_euler_method import apply_euler_method
 from learn_equations import prune_equations
 from optimize_ode_systems import dX_dt
-from local_utility import MyTimeoutError, timeout, timeout_func
+from local_utility import MyTimeoutError, run_process_with_timeout
 
 
 if __name__ == "__main__" :
     
     # some local imports
     import itertools
+    import multiprocessing
     import os
     import pandas as pd
     import pickle
@@ -33,9 +34,16 @@ if __name__ == "__main__" :
     from concurrent.futures import ThreadPoolExecutor, TimeoutError
     from sklearn.metrics import mean_squared_error, r2_score
     
-    # this is just a test with Lotka-Volterra
+    # this is just a test with Lotka-Volterra (or another ODE system); 
+    # here are some hard-coded values
     random_seed = 42
-    ode_system_file_name = "../data/lotka-volterra.txt"
+    timeout = 120 # in seconds
+    #ode_system_file_name = "../data/lotka-volterra.txt"
+    ode_system_file_name = "../data/rossler.txt"
+    # percentage of generated data to use for each split
+    training_split = 0.5
+    validation_split = 0.25
+    test_split = 0.25
     
     print("Starting experiment with ODE system in \"%s\"..." % ode_system_file_name)
     # 1. create an experiment folder; if a folder containing the same name is already
@@ -71,7 +79,19 @@ if __name__ == "__main__" :
         print("File with data from ODE system found, loading it and skipping to the next step...")
         df_ode = pd.read_csv(solved_ode_file_name)
         
-    # TODO split data between train, validation, and test
+    # split data between train, validation, and test; we are going consecutively
+    # as this is a time series
+    data_set_size = df_ode.shape[0]
+    df_ode_train = df_ode.iloc[:int(training_split * data_set_size)]
+    df_ode_val = df_ode.iloc[int(training_split * data_set_size):int(training_split * data_set_size) + int(validation_split * data_set_size)]
+    df_ode_test = df_ode.iloc[int(training_split * data_set_size) + int(validation_split * data_set_size):]
+    # this last data set includes training + validation
+    df_ode_train_val = df_ode.iloc[:int(training_split * data_set_size) + int(validation_split * data_set_size)]
+    
+    print("Total data set size:", df_ode.shape[0])
+    print("Training samples:", df_ode_train.shape[0])
+    print("Validation samples:", df_ode_val.shape[0])
+    print("Test samples:", df_ode_test.shape[0])
         
     # 3. check if inside the experiment folder there is already a CSV file with
     # the data modified with the explicit Euler method; if so, skip
@@ -79,7 +99,7 @@ if __name__ == "__main__" :
     
     if not os.path.exists(euler_method_file_name) :
         print("Applying explicit Euler method...")
-        df_euler = apply_euler_method(df_ode)
+        df_euler = apply_euler_method(df_ode_train)
         df_euler.to_csv(euler_method_file_name, index=False)
     else :
         print("File with result of explicit Euler method found, loading it and skipping to the next step...")
@@ -199,107 +219,100 @@ if __name__ == "__main__" :
     with open(os.path.join(results_folder, "candidate_default_equations.txt"), "w") as fp :
         fp.write(candidate_system_default_equations_text)
     
-    # 7. now, it could be interesting to run the systems agains the original
-    # data, just to check what is their original performance, and which one
+    # 7. now, run the systems against the original
+    # data, checking what is their original performance, and which one
     # would be the best without parameter optimization
     candidates_initial_performance_file_name = os.path.join(results_folder, "candidates_initial_performance.csv")
     
-    if not os.path.exists(candidates_initial_performance_file_name) :
-        # whatever we did so far, inside 'candidate_ode_systems' we now got a list
-        # of n-uples of equations, each one representing a variable in the ODE system
-        dictionary_unoptimized_candidate_performances = {'system_id' : [], 'MSE' : [], 'R2' : []}
-        # and we can go back and read the original values from df_ode
-        initial_conditions = [df_ode[v].values[0] for v in variables_list]
-        t = df_ode["t"].values
-        measured_values = df_ode[variables_list].values
+    # TODO for long experiments (thousands of candidate systems) it is better
+    # to save the intermediate results of each candidate in a single file;
+    # so, if the file exists, we should read it; check what is the id of the
+    # last candidate system evaluated; and restart from there
+    # also, we need to save the file after each evaluation
+    
+    # whatever we did so far, inside 'candidate_ode_systems' we now got a list
+    # of n-uples of equations, each one representing a variable in the ODE system;
+    # so, we prepare a dictionary in any case, if the file with the results exists,
+    # we read it and replace the dictionary 
+    dictionary_unoptimized_candidate_performances = {'system_id' : [], 'MSE' : [], 'R2' : []}
+    
+    # also prepare all the other necessary variables
+    # and we can go back and read the original values from df_ode; but
+    # now, we are going to consider the training samples + the validation samples
+    initial_conditions = [df_ode_train_val[v].values[0] for v in variables_list]
+    t = df_ode_train_val["t"].values
+    measured_values = df_ode_train_val[variables_list].values
+    current_candidate_index = 0
+    
+    if os.path.exists(candidates_initial_performance_file_name) :
+        print("File \"%s\" exists, reading and resuming candidate system evaluation..." %
+              candidates_initial_performance_file_name)
+        # if the file exists, read it and transform it to a dictionary
+        df_initial_performance = pd.read_csv(candidates_initial_performance_file_name)
+        dictionary_unoptimized_candidate_performances = df_initial_performance.to_dict(orient='list')
+        #print(dictionary_unoptimized_candidate_performances)
         
-        # now, let's iterate over the candidate ODE systems
-        for index, candidate_ode_system in enumerate(candidate_ode_systems) :
-            
-            # the dX_dt function needs a dictionary of variable -> symbolic expression
-            candidate_equations = {variables_list[i] : parse_expr(candidate_ode_system[i])
-                                   for i in range(0, len(variables_list))}
-            
-            # solve the system for the given initial conditions; now, the function
-            # call looks a bit complex, because we need a wrapper to avoid waiting
-            # forever, which can happen in some cases, for very complex ODEs;
-            # the original call looks like:
-            #Y, info_dict = integrate.odeint(dX_dt, initial_conditions, t, 
-            #                                args=(candidate_equations, variables_list, ), 
-            #                                full_output=True)
-            
-            # this line below employs a decorator to manage the timeout
-            # but this also does not work! sometimes Windows just kills the whole
-            # thing with a mysterious "Windows fatal exception: access violation"
-            #func = timeout(60)(integrate.odeint)
-            
-            # as a THIRD ATTEMPT, let's try to use joblib with a temporary function
-            # nope, apparently the SequentialBackend does not make it possible to use
-            # timeout;
-            
-            # prepare function
-            args = (dX_dt, initial_conditions, t)
-            kwargs = {'args' : (candidate_equations, variables_list, ),
-                      'full_output' : True}
-            
-            # FOURTH ATTEMPT: concurrent.futures
-            result = None
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(integrate.odeint, *args, **kwargs)
-                try :
-                    result = future.result(timeout=60)
-                except TimeoutError :
-                    print("Timeout exceeded.")
-                except Exception as e :
-                    print("Exception:" + str(e))
-            
-            # these are the default values that will be used in case of errors
-            candidate_mse = sys.float_info.max
-            candidate_r2 = -sys.float_info.max
-            
-            if result is not None :
+        # find the highest index in the column 'system_id'; we should evaluate
+        # the following system
+        current_candidate_index = df_initial_performance["system_id"].max() + 1
+        print("Evaluation will be resumed from candidate %d/%d" % 
+              (current_candidate_index, len(candidate_ode_systems)))
+        
+    # now, let's iterate over the candidate ODE systems; if the index was read from
+    # an existing file, it could be in principle high enought to directly skip
+    # the following block of code
+    while current_candidate_index < len(candidate_ode_systems) :
+        
+        candidate_ode_system = candidate_ode_systems[current_candidate_index]
+        
+        # the dX_dt function needs a dictionary of variable -> symbolic expression
+        candidate_equations = {variables_list[i] : parse_expr(candidate_ode_system[i])
+                               for i in range(0, len(variables_list))}
+                  
+        # prepare arguments for function scipy.integrate.odeint
+        args = (dX_dt, initial_conditions, t)
+        kwargs = {'args' : (candidate_equations, variables_list, ),
+                  'full_output' : True}
+        
+        # SIXTH ATTEMPT at managing timeouts; let's go back to multiprocessing
+        result = None
+        try :
+            result = run_process_with_timeout(integrate.odeint, timeout, args, kwargs)
+        except TimeoutError as e :
+            print(e)
+        except Exception as e :
+            print("Exception:", str(e))
+        
+        # these are the default values that will be used in case of errors
+        candidate_mse = sys.float_info.max
+        candidate_r2 = -sys.float_info.max
+        
+        # if the integration succeeded, the result is not None; however,
+        # there might still be the case that some issues appeared, for example
+        # Y might contain infinite/NaN values. A control is thus needed.
+        if result is not None :
+            try :
                 Y, info_dict = result
                 candidate_mse = mean_squared_error(measured_values, Y)
                 candidate_r2 = r2_score(measured_values, Y)
-            
-            #try :
-                # this is using a wrapper for the timeout; but on Windows, it 
-                #shows an incoherent behavior. Let's try with a decorator
-                #Y, info_dict = timeout_func(integrate.odeint, args=(dX_dt, initial_conditions, t),
-                #                            kwargs={'args' : (candidate_equations, variables_list, ), 
-                #                                    'full_output' : True},
-                #                            timeout=60) # 60 seconds timeout
-                
-                # this is using the decorator
-            #    Y, info_dict = func(dX_dt, initial_conditions, t, 
-                #                                args=(candidate_equations, variables_list, ), 
-                #                                full_output=True)
-                
-                # compute performance
-            #    candidate_mse = mean_squared_error(measured_values, Y)
-            #    candidate_r2 = r2_score(measured_values, Y)
-            
-            #except Exception as ex:
-            #    print("Exception: " + str(ex))
-            #    # in case of an error, we just use horrible values for the performance metrics
-            #    candidate_mse = sys.float_info.max
-            #    candidate_r2 = -sys.float_info.max
-            
-            # add information to the dictionary
-            dictionary_unoptimized_candidate_performances["system_id"].append(index)
-            dictionary_unoptimized_candidate_performances["MSE"].append(candidate_mse)
-            dictionary_unoptimized_candidate_performances["R2"].append(candidate_r2)
-            
-            print("Candidate %d, R2=%.4f" % (index, candidate_r2))
-            
-        # save the results to a file, sorted by the best performance
-        print(dictionary_unoptimized_candidate_performances)
+            except Exception as e :
+                print("Exception raised while recovering integration result:", str(e))
+                 
+        # add information to the dictionary
+        dictionary_unoptimized_candidate_performances["system_id"].append(current_candidate_index)
+        dictionary_unoptimized_candidate_performances["MSE"].append(candidate_mse)
+        dictionary_unoptimized_candidate_performances["R2"].append(candidate_r2)
+        
+        print("Candidate %d, R2=%.4f" % (current_candidate_index, candidate_r2))
+        
+        # save the results to a file after every evaluation
         df_initial_performance = pd.DataFrame.from_dict(dictionary_unoptimized_candidate_performances)
-        df_initial_performance.sort_values(by="MSE", inplace=True)
         df_initial_performance.to_csv(candidates_initial_performance_file_name, index=False)
+        
+        # increase index
+        current_candidate_index += 1
     
-    else :
-        print("Found a file with the initial performance of the unoptimized candidate systems, loading it...")
-        df_initial_performance = pd.read_csv(candidates_initial_performance_file_name)
-        
-        
+    # a final save, sorting the candidate systems by performance
+    df_initial_performance = pd.DataFrame.from_dict(dictionary_unoptimized_candidate_performances)
+    df_initial_performance.sort_values(by="R2", inplace=True)
+    df_initial_performance.to_csv(candidates_initial_performance_file_name, index=False)

@@ -9,9 +9,12 @@ and calling functions with a time out.
 """
 
 import functools
+import multiprocessing
 import threading
 import sys
 import time
+
+from scipy import integrate
 
 # unfortunately, all this MyTimeoutError/timeout_func does not work under
 # Windows, causing mysterious "Windows fatal exception: access violation" errors
@@ -98,19 +101,99 @@ def timeout(seconds_before_timeout):
     return deco
 
 
+def process_function(queue, *args, **kwargs) :
+    print("Process starting")
+    result = integrate.odeint(*args, **kwargs)
+    print("Process finished")
+    queue.put(result)
+    
+    return
+
+def example_function(queue, argument, kwargument="ciao") :
+    
+    result = str(argument) + " " + str(kwargument)
+    queue.put(result)
+    
+    return
+
+def odeint_process_wrapper(conn, dX_dt, initial_conditions, t, odeint_args=(), full_output=False) :
+    print(dX_dt)
+    print(initial_conditions)
+    print(t)
+    print(odeint_args)
+    print(full_output)
+    result = integrate.odeint(dX_dt, initial_conditions, t, args=odeint_args, full_output=full_output)
+    Y, info_dict = result
+    print(Y)
+    
+    #queue.put(Y)
+    conn.send(result)
+    
+    return
+
+def run_process_with_timeout(func, timeout, func_args=None, func_kwargs=None) :
+    
+    with multiprocessing.Pool(processes=1) as pool :
+        result = pool.apply_async(func, func_args, func_kwargs)
+        try :
+            return result.get(timeout=timeout)
+        except multiprocessing.TimeoutError :
+            pool.terminate()
+            raise TimeoutError("Timeout exceeded.")
+    
+    return
 
 if __name__ == "__main__" :
     
-    # this code below is just a test of the timeout function wrapper
-    def _fit_distribution():
-        # some long operation which run for undetermined time
-        for i in range(1):
-            time.sleep(i)
-            
-        return 20
+    import pandas as pd
     
+    from sympy import parse_expr
+    from optimize_ode_systems import dX_dt
+    
+    # this code below is just a test of the timeout function wrapper
+    df_ode = pd.read_csv("2024-07-03-13-15-55-lotka-volterra/lotka-volterra.csv")
+    variables_list = ["x", "y"]
+    initial_conditions = [df_ode[v].values[0] for v in variables_list]
+    t = df_ode["t"].values
+    
+    equations = {'x': "-0.017114721*y", 'y': "-0.49482120130712*x"}
+    candidate_equations = {variables_list[i] : parse_expr(equations[variables_list[i]])
+                           for i in range(0, len(variables_list))}
+    
+    args = (dX_dt, initial_conditions, t)
+    kwargs = {'args' : (candidate_equations, variables_list, ),
+              'full_output' : True}
+    
+    # all right, another attempt: fork a process
+    result = None
     try:
-        return_value = timeout_func(_fit_distribution, timeout=2)
-        print(return_value)
-    except MyTimeoutError as ex:
-        print(ex)
+        result = run_process_with_timeout(integrate.odeint, 10, args, kwargs)
+        print(result)
+    except TimeoutError as e:
+        print(e)
+    except Exception as e:
+        print("Exception:", str(e))
+    
+    # all this part did not work
+    # #queue = multiprocessing.Queue() # queues have issues with large data, let's use pipes!
+    # parent_conn, child_conn = multiprocessing.Pipe()
+    
+    # print("Calling function...")
+    # process = multiprocessing.Process(target=odeint_process_wrapper, 
+    #                                   args=(child_conn,) + args, 
+    #                                   kwargs=kwargs)
+    
+    # process.start()
+    # process.join(20)
+    
+    # result = "process failed"
+    
+    # if process.is_alive() :
+    #     process.terminate()
+    #     process.join()
+    #     print("Timeout exceeded.")
+    # else :
+    #     if parent_conn.poll() :
+    #         result = parent_conn.recv()
+    
+    # print(result)
