@@ -7,6 +7,7 @@
 # - optimize parameters
 
 import datetime
+import juliacall
 
 from pysr import PySRRegressor
 from scipy import integrate
@@ -39,7 +40,7 @@ if __name__ == "__main__" :
     random_seed = 42
     timeout = 120 # in seconds
     #ode_system_file_name = "../data/lotka-volterra.txt"
-    ode_system_file_name = "../data/rossler.txt"
+    ode_system_file_name = "../data/rossler-stable.txt"
     # percentage of generated data to use for each split
     training_split = 0.5
     validation_split = 0.25
@@ -124,7 +125,7 @@ if __name__ == "__main__" :
             
             # initialize PySRRegressor
             symbolic_regressor = PySRRegressor(
-                population_size=50,
+                population_size=50, # for the first experiment, it was 50
                 niterations=1000,
                 batching=True, # use batches instead of the whole dataset
                 batch_size=50, # 50 is the default value for the batches

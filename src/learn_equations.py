@@ -5,7 +5,7 @@ import pandas as pd
 import sys
 
 from pysr import PySRRegressor
-from sympy import diff, simplify, symbols
+from sympy import diff, simplify, symbols, oo, zoo, nan
 from sympy.parsing.sympy_parser import parse_expr
 
 def learn_equations(df) :
@@ -75,10 +75,23 @@ def prune_equations(equations) :
     #       but then, it's still hard to find stuff.
     pruned_equations = []
     for i_1, eq_1 in enumerate(equations_replaced) :
-
+        
+        consider_equation = True
+        
         # first, check if the simplified equation contains only constants
-        if not simplify(eq_1).is_constant() :
-
+        # TODO some systems actually have constant values for equations, so maybe
+        # the correct way to proceed is to just remove constant equations that
+        # are exactly equal to zero (deriving and setting delta_t to zero made them 0.0)
+        #if not simplify(eq_1).is_constant() :
+        if simplify(eq_1) == 0 :
+           consider_equation = False 
+        
+        # another interesting way to prune the equations is by removing any
+        # expression containing infinity or 'zoo' (negative infinity)
+        if eq_1.has(oo, -oo, zoo, nan) :
+            consider_equation = False
+        
+        if consider_equation :
             # then, check if the equation is a duplicate of something we
             # already have stored among the pruned equations
             is_equation_duplicate = False
@@ -89,6 +102,10 @@ def prune_equations(equations) :
 
             if is_equation_duplicate == False :
                 pruned_equations.append(eq_1)
+                
+    # TODO since I am no longer discarding the equations that reduce to a constant,
+    # it would probably be interesting to go through the list of pruned equations
+    # and just keep ONE equation that reduces to a constant
 
     return pruned_equations
 
