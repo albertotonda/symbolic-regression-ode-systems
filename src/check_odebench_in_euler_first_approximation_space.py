@@ -49,9 +49,10 @@ def create_latex_table(results, min_state_variables=1, max_state_variables=1) :
     """
     latex_table = r'\begin{table}[htb]' + '\n'
     latex_table += r'\centering' + '\n'
-    latex_table += r'\resizebox{!}{0.99\textwidth}{%' + '\n'
-    latex_table += r'\begin{tabular}[c|c|c|c|c|c]' + '\n'
+    latex_table += r'\resizebox{0.99\textwidth}{!}{%' + '\n'
+    latex_table += r'\begin{tabular}{c|c|c|c|c|c}' + '\n'
     latex_table += r'\textbf{Id} & \textbf{Description} & \textbf{State variable} & \textbf{$F$} & \textbf{Trajectory} & \textbf{$R2$}\\' + '\n'
+    latex_table += r'\hline \hline' + '\n'
     
     results_index = 0
     while results_index < len(results) : # 3 keys: id, description, state variables
@@ -69,7 +70,7 @@ def create_latex_table(results, min_state_variables=1, max_state_variables=1) :
             # this first part will take a number of rows equal to the number of state variables * number of trajectories
             n_rows = len(state_variables) * len(trajectories)
             latex_table += r'\multirow{' + str(n_rows) + '}{*}{' + str(results_system["id"]) + r'} & ' 
-            latex_table += r'\multirow{' + str(n_rows) + '}{*}{' + results_system["eq_description"] + r'} & '
+            latex_table += r'\multirow{' + str(n_rows) + '}{*}{\parbox{5cm}{' + results_system["eq_description"] + r'}} & '
             
             # now, each cell for a state variable will take a number of rows equal to the number of trajectories
             for state_variable in state_variables :
@@ -80,7 +81,7 @@ def create_latex_table(results, min_state_variables=1, max_state_variables=1) :
                 latex_table += r'\multirow{' + str(n_rows) + r'}{*}{$' + state_variable + r'$} & '
                 # we set the equation to visualize only 3 significant digits for the numerical parameters
                 equation_sympy = sympy.sympify(results_system[state_variable]["F"])
-                equation_string = str(equation_sympy.evalf(4))
+                equation_string = sympy.latex(equation_sympy.evalf(4))
                 latex_table += r'\multirow{' + str(n_rows) + r'}{*}{$' + equation_string + r'$} & '
                 
                 # now, the performance of the equation for each trajectory
@@ -90,7 +91,13 @@ def create_latex_table(results, min_state_variables=1, max_state_variables=1) :
                     
                     # add an empty row, unless this is the last trajectory
                     if t != trajectories[-1] :
+                        latex_table += '\cline{5-6}' + '\n'
                         latex_table += r' & & & & '
+                
+                # if this is not the last state variable, add some extra Latex
+                if state_variable != state_variables[-1] :
+                    latex_table += r'\cline{3-6}' + '\n'
+                    latex_table += r' & & '
         
             # add a line in the table
             latex_table += r'\hline' + '\n'
@@ -98,8 +105,8 @@ def create_latex_table(results, min_state_variables=1, max_state_variables=1) :
         results_index += 1
         
     # end of the table
+    latex_table += r'\end{tabular}%' + '\n'
     latex_table += r'}' + '\n' # end of the resizebox
-    latex_table += r'\end{tabular}' + '\n'
     latex_table += r'\end{table}' + '\n'
     
     return latex_table
@@ -200,11 +207,17 @@ def main() :
             
             # for each state variable y, obtain the F_y known ground truth form
             for state_variable, equation in equations.items() :
-                delta_t = sympy.Symbol("delta_t")
+                delta_t = sympy.Symbol("Delta_t")
                 euler_equation = sympy.Mul(delta_t, equation)
                 
                 # prepare symbols and values for the lambdified equation
-                equation_symbols = [sympy.sympify(s) for s in df_euler.columns]
+                equation_symbols = []
+                for c in df_euler.columns :
+                    if c == "delta_t" :
+                        equation_symbols.append(sympy.sympify("Delta_t"))
+                    else :
+                        equation_symbols.append(sympy.sympify(c))
+                #equation_symbols = [sympy.sympify(s) for s in df_euler.columns]
                 symbol_values = [df_euler[c].values for c in df_euler.columns]
                 
                 # obtain predicted values
