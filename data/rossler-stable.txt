@@ -2,5 +2,7 @@ dx_0/dt = 5.0 * (-x_1 -x_2)
 dx_1/dt = 5.0 * (-0.2 * x_1 + x_0)
 dx_2/dt = 5.0 * (0.2 + x_2 * (-5.7 + x_0))
 initial_conditions: x_0=2.3 x_1=1.1 x_2=0.8
+#time_step: 0.1
+#maximum_time: 1000
 time_step: 0.1
-maximum_time: 1000
+maximum_time: 40

@@ -2,5 +2,5 @@ dx/dt = - y - z
 dy/dt = x + 0.2 * y
 dz/dt = 0.2 + z * (x - 5.7)
 initial_conditions: x=1 y=1 z=1
-time_step: 0.1
-maximum_time: 1000
+time_step: 0.01
+maximum_time: 100

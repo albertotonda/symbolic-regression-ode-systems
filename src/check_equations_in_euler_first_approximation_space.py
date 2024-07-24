@@ -26,14 +26,15 @@ def main() :
     
     # pick the text file of the system here
     #ode_system_file_name = "../data/lotka-volterra.txt"
-    ode_system_file_name = "../data/rossler-stable.txt"
+    #ode_system_file_name = "../data/rossler-stable.txt"
+    ode_system_file_name = "../data/rossler.txt"
     
     # we will be plotting stuff, so let's set a nice style
     sns.set_style('darkgrid')
     
     # create directory based on the name of the original ODE system file
     ode_system_name = os.path.basename(ode_system_file_name)[:-4]
-    results_directory = "checking-" + ode_system_name
+    results_directory = "../local_results/checking-" + ode_system_name
     
     if not os.path.exists(results_directory) :
         os.makedirs(results_directory)
@@ -119,7 +120,7 @@ def main() :
         
         fig, ax = plt.subplots(figsize=(10,8))
         scatter = ax.scatter(df_plot["t"].values, df_plot[variable].values, c=df_plot[residuals_column].values,
-                   cmap='plasma', label="Dynamic for variable %s" % variable)
+                   marker='.', cmap='plasma', alpha=0.7, label="Dynamic for variable %s" % variable)
         cbar = plt.colorbar(scatter)
         cbar.set_label("Values of the residuals")
         
@@ -127,7 +128,8 @@ def main() :
         ax.set_ylabel(variable)
         ax.set_title("Dynamic for variable %s, color-coded by values of residuals" % variable)
         
-        plt.savefig(os.path.join(results_directory, "residuals-" + variable + ".png"), dpi=300)
+        # normally I would use dpi=300, but large images create issues with Overleaf
+        plt.savefig(os.path.join(results_directory, "residuals-" + variable + ".png"), dpi=150) 
         plt.close(fig)
         
         
