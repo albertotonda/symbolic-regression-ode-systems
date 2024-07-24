@@ -24,7 +24,7 @@ from sympy.utilities.lambdify import lambdify
 # local package(s)
 from explicit_euler_method import apply_euler_method
 
-def slugify(value, allow_unicode=False):
+def slugify(value, allow_unicode=False) :
     """
     Taken from https://github.com/django/django/blob/master/django/utils/text.py
     Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
@@ -39,6 +39,70 @@ def slugify(value, allow_unicode=False):
         value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
     value = regex.sub(r'[^\w\s-]', '', value.lower())
     return regex.sub(r'[-\s]+', '-', value).strip('-_')
+
+def create_latex_table(results, min_state_variables=1, max_state_variables=1) :
+    """
+    Utility function to create a latex table with a summary of the results. The
+    arguments are used to select the group of results to include. In the original
+    conception, I am going to have 3 tables: one for ODE systems with 1 equation, one
+    for ODE systems with 2 equations, one for ODE systems with 3-4 equations.
+    """
+    latex_table = r'\begin{table}[htb]' + '\n'
+    latex_table += r'\centering' + '\n'
+    latex_table += r'\resizebox{!}{0.99\textwidth}{%' + '\n'
+    latex_table += r'\begin{tabular}[c|c|c|c|c|c]' + '\n'
+    latex_table += r'\textbf{Id} & \textbf{Description} & \textbf{State variable} & \textbf{$F$} & \textbf{Trajectory} & \textbf{$R2$}\\' + '\n'
+    
+    results_index = 0
+    while results_index < len(results) : # 3 keys: id, description, state variables
+        
+        # local variable, for easier manipulation
+        results_system = results[results_index]
+        
+        # get the keys/names of the state variables
+        state_variables = [k for k in results_system if k != "id" and k != "eq_description"]
+        # get also the names of the trajectories
+        trajectories = [k for k in results_system[state_variables[0]] if k != "F"]
+        
+        if len(state_variables) >= min_state_variables and len(state_variables) <= max_state_variables :
+        
+            # this first part will take a number of rows equal to the number of state variables * number of trajectories
+            n_rows = len(state_variables) * len(trajectories)
+            latex_table += r'\multirow{' + str(n_rows) + '}{*}{' + str(results_system["id"]) + r'} & ' 
+            latex_table += r'\multirow{' + str(n_rows) + '}{*}{' + results_system["eq_description"] + r'} & '
+            
+            # now, each cell for a state variable will take a number of rows equal to the number of trajectories
+            for state_variable in state_variables :
+                
+                # here the multirow parameter is the number of trajectories
+                n_rows = len(trajectories)
+                # add name of the variable and its equation
+                latex_table += r'\multirow{' + str(n_rows) + r'}{*}{$' + state_variable + r'$} & '
+                # we set the equation to visualize only 3 significant digits for the numerical parameters
+                equation_sympy = sympy.sympify(results_system[state_variable]["F"])
+                equation_string = str(equation_sympy.evalf(4))
+                latex_table += r'\multirow{' + str(n_rows) + r'}{*}{$' + equation_string + r'$} & '
+                
+                # now, the performance of the equation for each trajectory
+                for trajectory_index, t in enumerate(trajectories) :
+                    latex_table += str(trajectory_index+1) + ' & '
+                    latex_table += "%.6f" % results_system[state_variable][t] + r' \\' + '\n'
+                    
+                    # add an empty row, unless this is the last trajectory
+                    if t != trajectories[-1] :
+                        latex_table += r' & & & & '
+        
+            # add a line in the table
+            latex_table += r'\hline' + '\n'
+        
+        results_index += 1
+        
+    # end of the table
+    latex_table += r'}' + '\n' # end of the resizebox
+    latex_table += r'\end{tabular}' + '\n'
+    latex_table += r'\end{table}' + '\n'
+    
+    return latex_table
 
 def main() :
     
@@ -166,6 +230,21 @@ def main() :
     # collected in the "results" list; since there are 63 (!) systems, maybe
     # I could copy what the people in ODEBench did, and just go for separate
     # tables, depending on the number of equations in the system
+    
+    # use the function to create different tables, for 1, 2, and 3-4 state variables
+    print("Now postprocessing results...")
+    latex_table_1 = create_latex_table(results, min_state_variables=1, max_state_variables=1)
+    # write table to file
+    with open(os.path.join(results_directory, "table-1-state-variable.tex"), "w") as fp :
+        fp.write(latex_table_1)
+        
+    latex_table_2 = create_latex_table(results, min_state_variables=2, max_state_variables=2)
+    with open(os.path.join(results_directory, "table-2-state-variables.tex"), "w") as fp :
+        fp.write(latex_table_2)
+        
+    latex_table_3_4 = create_latex_table(results, min_state_variables=3, max_state_variables=4)
+    with open(os.path.join(results_directory, "table-3-4-state-variables.tex"), "w") as fp :
+        fp.write(latex_table_3_4)
     
     return
 
