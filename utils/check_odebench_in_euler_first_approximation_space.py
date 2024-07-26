@@ -21,7 +21,9 @@ import unicodedata # this is just used to sanitize strings for file names
 from sklearn.metrics import r2_score
 from sympy.utilities.lambdify import lambdify
 
-# local package(s)
+# local package(s), imported from another directory
+# using a 'parent package' would be cleaner; but for the moment, let's use a brutal way
+sys.path.append("../src/")
 from explicit_euler_method import apply_euler_method
 
 def slugify(value, allow_unicode=False) :
@@ -138,7 +140,7 @@ def main() :
     
     # some hard-coded values
     # source file, in JSON
-    odebench_file_name = "../local_files/odeformer/odeformer/odebench/solutions.json"
+    odebench_file_name = "../data/odebench/all_odebench_trajectories.json"
     # this one is another file that allegedly should contain the same information,
     # but it is in fact different (!)
     #odebench_file_name = "../local_files/odeformer/odeformer/odebench/strogatz_extended.json"
