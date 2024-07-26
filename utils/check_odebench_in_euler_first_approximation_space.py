@@ -140,12 +140,13 @@ def main() :
     
     # some hard-coded values
     # source file, in JSON
-    odebench_file_name = "../data/odebench/all_odebench_trajectories.json"
+    #odebench_file_name = "../data/odebench/all_odebench_trajectories.json"
+    odebench_file_name = "../data/odebench/selected_equations_600_points_trajectories.json"
     # this one is another file that allegedly should contain the same information,
     # but it is in fact different (!)
     #odebench_file_name = "../local_files/odeformer/odeformer/odebench/strogatz_extended.json"
     # results folder
-    results_directory = "../local_results/checking-odebench"
+    results_directory = "../local_results/checking-odebench-selected-600-points"
     
     # this data structure will be used to collect the results
     results = []
@@ -264,10 +265,13 @@ def main() :
         # here is the end of the loop for a system
         results.append(results_system)
         
-    # TODO it would be nice to create a Latex table starting from the results
+    # it would be nice to create a Latex table starting from the results
     # collected in the "results" list; since there are 63 (!) systems, maybe
     # I could copy what the people in ODEBench did, and just go for separate
     # tables, depending on the number of equations in the system
+    
+    # now, the function here below works; but it would be better to actually
+    # separate this script from the Latex post-processing, this is a TODO
     
     # use the function to create different tables, for 1, 2, and 3-4 state variables
     print("Now postprocessing results...")
