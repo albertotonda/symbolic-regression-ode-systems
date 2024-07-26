@@ -47,15 +47,24 @@ def create_latex_table(results, min_state_variables=1, max_state_variables=1) :
     conception, I am going to have 3 tables: one for ODE systems with 1 equation, one
     for ODE systems with 2 equations, one for ODE systems with 3-4 equations.
     """
+    # set of html colors that will be used to color the cells in the table
+    html_colors = {
+        'best' : 'ccff00',
+        'good' : 'a0d6b4',
+        'bad' : 'ee82ee',
+        'worst' : 'a74ac7',
+        }
+    
     latex_table = r'\begin{table}[htb]' + '\n'
     latex_table += r'\centering' + '\n'
     latex_table += r'\resizebox{0.99\textwidth}{!}{%' + '\n'
-    latex_table += r'\begin{tabular}{c|c|c|c|c|c}' + '\n'
+    #latex_table += r'\begin{tabular}{c|c|c|c|c|c}' + '\n'
+    latex_table += r'\begin{tabular}{cccccc}' + '\n' # let's try to go for a nicer style
     latex_table += r'\textbf{Id} & \textbf{Description} & \textbf{State variable} & \textbf{$F$} & \textbf{Trajectory} & \textbf{$R2$}\\' + '\n'
     latex_table += r'\hline \hline' + '\n'
     
     results_index = 0
-    while results_index < len(results) : # 3 keys: id, description, state variables
+    while results_index < len(results) :
         
         # local variable, for easier manipulation
         results_system = results[results_index]
@@ -86,17 +95,31 @@ def create_latex_table(results, min_state_variables=1, max_state_variables=1) :
                 
                 # now, the performance of the equation for each trajectory
                 for trajectory_index, t in enumerate(trajectories) :
+                    
+                    # we also add some colors to mark the trajectories for which
+                    # the real equation performed well (or not well at all)
+                    r2_value = results_system[state_variable][t]
+                    performance = 'best'
+                    if r2_value < 0.99 and r2_value > 0.9 :
+                        performance = 'good'
+                    elif r2_value <= 0.9 and r2_value > 0.5 :
+                        performance = 'bad'
+                    elif r2_value <= 0.5 :
+                        performance = 'worst'
+                    
+                    latex_table += r'\cellcolor[HTML]{' + html_colors[performance] + r'}'
                     latex_table += str(trajectory_index+1) + ' & '
-                    latex_table += "%.6f" % results_system[state_variable][t] + r' \\' + '\n'
+                    latex_table += r'\cellcolor[HTML]{' + html_colors[performance] + r'}'
+                    latex_table += "%.6f" % r2_value + r' \\' + '\n'
                     
                     # add an empty row, unless this is the last trajectory
                     if t != trajectories[-1] :
-                        latex_table += '\cline{5-6}' + '\n'
+                        #latex_table += '\cline{5-6}' + '\n'
                         latex_table += r' & & & & '
                 
                 # if this is not the last state variable, add some extra Latex
                 if state_variable != state_variables[-1] :
-                    latex_table += r'\cline{3-6}' + '\n'
+                    #latex_table += r'\cline{3-6}' + '\n'
                     latex_table += r' & & '
         
             # add a line in the table
@@ -208,7 +231,7 @@ def main() :
             # for each state variable y, obtain the F_y known ground truth form
             for state_variable, equation in equations.items() :
                 delta_t = sympy.Symbol("Delta_t")
-                euler_equation = sympy.Mul(delta_t, equation)
+                euler_equation = sympy.Mul(delta_t, equation, evaluate=False)
                 
                 # prepare symbols and values for the lambdified equation
                 equation_symbols = []
