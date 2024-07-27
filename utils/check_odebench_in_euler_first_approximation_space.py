@@ -140,13 +140,14 @@ def main() :
     
     # some hard-coded values
     # source file, in JSON
-    #odebench_file_name = "../data/odebench/all_odebench_trajectories.json"
-    odebench_file_name = "../data/odebench/selected_equations_600_points_trajectories.json"
+    odebench_file_name = "../data/odebench/all_odebench_trajectories.json"
+    #odebench_file_name = "../data/odebench/selected_equations_600_points_trajectories.json"
     # this one is another file that allegedly should contain the same information,
     # but it is in fact different (!)
     #odebench_file_name = "../local_files/odeformer/odeformer/odebench/strogatz_extended.json"
     # results folder
-    results_directory = "../local_results/checking-odebench-selected-600-points"
+    results_directory = "../local_results/checking-odebench"
+    #results_directory = "../local_results/checking-odebench-selected-600-points"
     
     # this data structure will be used to collect the results
     results = []
@@ -253,9 +254,33 @@ def main() :
                 # compute R2 score
                 r2_value = r2_score(ground_truth, equation_values)
                 
-                # TODO save results in a better format?
+                # some printouts
                 print("-- For state variable \"%s\", real F_%s has R2=%.6f" %
                       (state_variable, state_variable, r2_value))
+                
+                # now, it is interesting to actually plot the results to
+                # check where the residuals are the largest (e.g. where the
+                # approximation fails with respect to the actual values)
+                # TODO but this is the derivative! maybe we can do something better
+                residuals = abs(ground_truth - equation_values)
+                
+                fig, ax = plt.subplots(figsize=(10,8))
+                scatter = ax.scatter(df_euler["t"].values, ground_truth, c=residuals,
+                           marker='.', cmap='plasma', alpha=0.7, 
+                           label="Dynamic for variable %s" % state_variable)
+                cbar = plt.colorbar(scatter)
+                cbar.set_label("Values of the residuals")
+                
+                ax.set_xlabel("t")
+                ax.set_ylabel("$" + state_variable + "$")
+                ax.set_title("Dynamic for variable $%s$, color-coded by values of residuals" 
+                             % state_variable)
+                
+                plt.savefig(os.path.join(system_directory, 
+                                         "trajectory-%d-residuals-%s.png" % 
+                                         (trajectory_index, state_variable)), 
+                            dpi=150)
+                plt.close(fig)
                 
                 # save results in the dictionary
                 results_system[state_variable]["F"] = str(euler_equation)
