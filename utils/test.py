@@ -7,13 +7,23 @@
 # - optimize parameters
 
 import datetime
+import itertools
 import juliacall
+import os
+import pandas as pd
+import pickle
+import shutil
+import sys
+
+from sklearn.metrics import mean_squared_error, r2_score
 
 from pysr import PySRRegressor
 from scipy import integrate
 from sympy.parsing.sympy_parser import parse_expr
 
-# local libraries
+# local libraries; in order to include I need to use this trick with 'sys' that is
+# not super-clean...
+sys.path.append("../src/")
 from create_dataset_from_ode_system import get_df_from_ode_system, parse_ode_from_text
 from explicit_euler_method import apply_euler_method
 from learn_equations import prune_equations
@@ -22,18 +32,6 @@ from local_utility import MyTimeoutError, run_process_with_timeout
 
 
 if __name__ == "__main__" :
-    
-    # some local imports
-    import itertools
-    import multiprocessing
-    import os
-    import pandas as pd
-    import pickle
-    import shutil
-    import sys
-    
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError
-    from sklearn.metrics import mean_squared_error, r2_score
     
     # this is just a test with Lotka-Volterra (or another ODE system); 
     # here are some hard-coded values

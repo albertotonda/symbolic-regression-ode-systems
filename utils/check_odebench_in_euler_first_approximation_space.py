@@ -261,21 +261,48 @@ def main() :
                 # now, it is interesting to actually plot the results to
                 # check where the residuals are the largest (e.g. where the
                 # approximation fails with respect to the actual values)
-                # TODO but this is the derivative! maybe we can do something better
-                residuals = abs(ground_truth - equation_values)
                 
-                fig, ax = plt.subplots(figsize=(10,8))
-                scatter = ax.scatter(df_euler["t"].values, ground_truth, c=residuals,
-                           marker='.', cmap='plasma', alpha=0.7, 
-                           label="Dynamic for variable %s" % state_variable)
+                # we are going to do that by computing the residuals; then, adding
+                # the residuals as an extra column to df_euler; then, filtering
+                # the results for \Delta_t != 0; and then pairing everything up
+                # for two subplots: actual function and derivative, both colored
+                # using the residuals
+                residuals = abs(ground_truth - equation_values)
+                df_euler["residuals"] = residuals
+                df_plot = df_euler[df_euler["delta_t"] != 0]
+                
+                df_plot_trajectory = df_trajectory[df_trajectory["t"].isin(df_plot["t"].values)]
+                
+                fig, axs = plt.subplots(ncols=1, nrows=2, figsize=(10,16))
+                
+                # first, plot for the trajectory
+                scatter = axs[0].scatter(df_plot["t"].values, df_plot_trajectory[state_variable].values, 
+                            c=df_plot["residuals"].values, marker='.', cmap='plasma', alpha=0.7, 
+                           label="Dynamic for variable %s, trajectory %d" % (state_variable, trajectory_index))
+                axs[0].set_title("Trajectory %d for variable $%s$, color-coded by values of residuals" %
+                                (trajectory_index, state_variable))
+                axs[0].set_xlabel("t")
+                axs[0].set_ylabel("$%s$" % state_variable)
+                axs[0].legend(loc='best')
+                
+                scatter2 = axs[1].scatter(df_plot["t"].values, df_plot["F_" + state_variable].values,
+                              c=df_plot["residuals"].values, marker='.', cmap='plasma', alpha=0.7,
+                              label="Derivative of $%s$ for trajectory %d, color-coded by values of residuals" %
+                              (state_variable, trajectory_index))
+                axs[1].set_xlabel("t")
+                axs[1].set_ylabel("$d" + state_variable + "/dt$")
+                axs[1].set_title("Derivative of variable $%s$ for trajectory %d, color-coded by values of residuals" %
+                                (state_variable, trajectory_index))
+                axs[1].legend(loc='best')
+                
+                # add colorbar to the side
                 cbar = plt.colorbar(scatter)
                 cbar.set_label("Values of the residuals")
+                cbar2 = plt.colorbar(scatter2)
+                cbar2.set_label("Values of the residuals")
                 
-                ax.set_xlabel("t")
-                ax.set_ylabel("$" + state_variable + "$")
-                ax.set_title("Dynamic for variable $%s$, color-coded by values of residuals" 
-                             % state_variable)
-                
+                # aesthetics
+                fig.tight_layout()
                 plt.savefig(os.path.join(system_directory, 
                                          "trajectory-%d-residuals-%s.png" % 
                                          (trajectory_index, state_variable)), 

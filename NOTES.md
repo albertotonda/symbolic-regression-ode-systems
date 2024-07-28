@@ -22,6 +22,9 @@ Ideally, a lot of experiments can be run, changing:
 	- "Similarity Between Two Stochastic Differential Systems"
 	- "A General Metric for the Similarity of Both Stochastic and Deterministic System Dynamics"
 
+## 2024-07-27
+So, a thorough run on ODEBench and some extra experiments show that the issue is related to the size of $\Delta_t$. The same value that works well for some systems works awfully for others; still, reducing $\Delta_t$ always improves the results. I wonder if there are some huge errors only for a few points, and maybe what should be really optimized is the median error, instead of MSE.
+
 ## 2024-07-13
 There is a problem somewhere in the $f(x, t) -> F_x(x, t, delta_t)$ conversion. The original equation in some cases (e.g. Rossler's F_x_2) does not seem to perform better than others, that are clearly wrong (even wrong structure!). Possible reasons of the issues:
 1. There is a bug somewhere in the symbolic process that performs the transformation. But this is kinda weird, because it works in other cases.
