@@ -71,7 +71,7 @@ if __name__ == "__main__" :
     
     # we could iterate over all benchmarks in ODEBench, but it's more likely
     # that we will just go for one, selected by its id
-    selected_system_ids = [system_id for system_id in range(1, 24)]
+    selected_system_ids = [system_id for system_id in range(24, 52)]
     
     # read the file containing all the trajectories
     print("Reading file \"%s\", containing the trajectories..." % odebench_file_name)
@@ -159,9 +159,8 @@ if __name__ == "__main__" :
                     batching=False, # use batches instead of the whole dataset
                     batch_size=50, # 50 is the default value for the batches
                     model_selection="best",  # Result is mix of simplicity+accuracy
-                    binary_operators=["+", "*", "/", "-", "pow(x,y)=x^y"],
+                    binary_operators=["+", "*", "/", "-",], # "pow",],
                     unary_operators=["sin", "cos", "exp", "log", "sqrt",],
-                    extra_sympy_mappings={"pow" : lambda x, y : x**y},
                     #loss_function=loss_function_julia_string,
                     #early_stop_condition=("stop_if(loss, complexity) = loss < 1e-6 && complexity < 10"), # stop early if we find a good and simple equation
                     temp_equation_file=True, # does not clutter directory with temporary files
