@@ -18,6 +18,9 @@ import os
 import pandas as pd
 import re as regex
 
+from sklearn.metrics import mean_squared_error, r2_score
+from sympy import Symbol, sympify
+from sympy.utilities.lambdify import lambdify
 from typing import Dict, List, Union
 
 from ffx import FFXRegressor # install this using the https://github.com/natekupp/ffx/tree/jmmcd-patch-1 branch
@@ -53,12 +56,56 @@ def get_differentiation_method(
         smoother_kws={'window_length': smoother_window_length},
     )
 
+# these below are functions that I wrote to make my life easier (hopefully)
+def score_models_on_training(df_X, y, models, metrics=[mean_squared_error, r2_score]) :
+    """
+    Given the training data and the ground truth, score the models; returns a
+    dictionary of lists, ready to be converted to a pandas DataFrame.
+    """
+    dictionary = {'equation': []}
+    for metric in metrics :
+        dictionary[metric.__name__] = []
+    
+    for model in models :
+        # transform the equation in a symbolic Sympy expression
+        eq = sympify(model)
+        symbols = [Symbol(c) for c in df_X.columns]
+        symbol_values = [df_X[c].values for c in df_X.columns]
+        
+        # and now, let's lambdify and run it! there are some corner cases where
+        # this fails, probably due to the use of a 'max' operation; still, it is
+        # possible to correct this, using a slower way of iterating over the
+        # DataFrame, passing the arguments as tuples of floating points
+        try :
+            y_pred = lambdify(symbols, eq)(*symbol_values)
+        except ValueError :
+            eq_lambda = lambdify(symbols, eq)
+            
+            y_pred = np.zeros(y.shape)
+            for index, row in df_X.iterrows() :
+                symbol_values = [row[c] for c in df_X.columns]
+                y_pred[i] = eq_lambda(*symbol_values)
+        
+        # now, if the equation is a constant, for some reason lambdify returns
+        # just ONE value, no matter the size of the arguments; no worries, we
+        # can easily check this and correct it
+        if not isinstance(y_pred, np.ndarray) :
+            y_pred = y_pred * np.ones(y.shape)
+        
+        # store all relevant information inside the dictionary
+        dictionary["equation"].append(str(model))
+        
+        for metric in metrics :
+            dictionary[metric.__name__].append(metric(y, y_pred))
+        
+    return dictionary
+
 if __name__ == "__main__" :
     
     # hard-coded values
     odebench_json_file_name = "../data/odebench/all_odebench_trajectories.json"
     random_seed = 42
-    selected_system_ids = [24] # if this is empty, it just gets all systems
+    selected_system_ids = [s for s in range(24, 64)] # if this is an empty list, it just gets all systems
     results_folder = "../local_results/results-odebench-baselines"
     
     # read the file containing all the trajectories
@@ -81,6 +128,11 @@ if __name__ == "__main__" :
     for system in odebench :
         print("Now working on system %d (\"%s\")" % (system["id"], system["eq_description"]))
         
+        # check if the system folder already exists, and if it does not, create it
+        system_folder = os.path.join(results_folder, "system-%d" % system["id"])
+        if not os.path.exists(system_folder) :
+            os.makedirs(system_folder)
+        
         state_variables = regex.findall("([0-9|a-z|\_]+)\:\s+", system["var_description"])
         print("The system has state variables:", state_variables)
         
@@ -92,7 +144,7 @@ if __name__ == "__main__" :
         # where the 'X' are the trajectories, and the 'y' is the approxiamation
         # of the derivative for that variable
         for state_variable_index, state_variable in enumerate(state_variables) :
-            
+            print("Now working on state variable \"%s\"..." % state_variable)
             # prepare all the data in a single np.array
             X = None
             y = None
@@ -120,18 +172,32 @@ if __name__ == "__main__" :
                     y = derivative
                 else :
                     y = np.concatenate((y, derivative), axis=0)
-                
-            # now the data for the state variable has been collected
-            print("X.shape=", X.shape)
-            print("y.shape=", y.shape)
+            
+            # let's define the name of the output file
+            state_variable_ffx_file = os.path.join(system_folder, "variable-%s-ffx.csv" % state_variable)
             
             # call the methods! an interesting note, if FFXRegressor is called
             # with a Pandas DataFrame as X, it will also automatically obtain the
             # names of the features from the columns; so, let's convert X to a DataFrame
-            df_X = pd.DataFrame.from_dict({state_variables[i] : X[:,i] for i in range(0, len(state_variables))})
-            ffx_regressor = FFXRegressor()
-            ffx_regressor.fit(df_X, y)
-            print(ffx_regressor.models_)
-            
+            if not os.path.exists(state_variable_ffx_file) :
+                # we need to use a try/except scope here, in some cases it just
+                # crashes with a SystemExit
+                try :
+                    df_X = pd.DataFrame.from_dict({state_variables[i] : X[:,i] for i in range(0, len(state_variables))})
+                    ffx_regressor = FFXRegressor()
+                    ffx_regressor.fit(df_X, y)
+                    model_strings = [str(m) for m in ffx_regressor.models_]
+                    print(model_strings)
+                    
+                    # score the models, obtain a dictionary, save the dictionary to file
+                    dictionary_models = score_models_on_training(df_X, y, model_strings)
+                    df_models = pd.DataFrame.from_dict(dictionary_models)
+                
+                except SystemExit as ex :
+                    df_models = pd.DataFrame.from_dict({'equation' : ['Failure'], 
+                                                        'error_message' : [str(ex)]})
+                
+                # in any case, save to file
+                df_models.to_csv(state_variable_ffx_file, index=False) 
         
         
