@@ -17,6 +17,7 @@ import numpy as np
 import os
 import pandas as pd
 import re as regex
+import sys
 
 from sklearn.metrics import mean_squared_error, r2_score
 from sympy import Symbol, sympify
@@ -55,6 +56,14 @@ def get_differentiation_method(
         order=finite_difference_order,
         smoother_kws={'window_length': smoother_window_length},
     )
+
+# cut and pasted from the ODEFormer wrappers, with some minor modifications
+def format_equation_syndy(expr: str, feature_names: List[str]):
+    expr = regex.sub(r"(\d+\.?\d*) (1)", repl=r"\1 * \2", string=expr)
+    for var_name in feature_names :
+        expr = regex.sub(fr"(\d+\.?\d*) ({var_name})", repl=r"\1 * \2", string=expr)
+    expr = expr.replace("^", "**")
+    return expr
 
 # these below are functions that I wrote to make my life easier (hopefully)
 def score_models_on_training(df_X, y, models, metrics=[mean_squared_error, r2_score]) :
@@ -102,6 +111,12 @@ def score_models_on_training(df_X, y, models, metrics=[mean_squared_error, r2_sc
 
 if __name__ == "__main__" :
     
+    # TODO it would be interesting to have a DataFrame with all the equations
+    # obtained by each method, for each combination of hyperparameters; and
+    # also using the two different systems of obtaining regular data,
+    # the delta_y / delta_t and the dF/dDelta_t; the issue being, that every
+    # approach has a different number and type of hyperparameters
+    
     # hard-coded values
     odebench_json_file_name = "../data/odebench/all_odebench_trajectories.json"
     random_seed = 42
@@ -141,8 +156,9 @@ if __name__ == "__main__" :
         trajectories = system["solutions"][0]
         
         # for most methods, we have to perform a variable-by-variable regression,
-        # where the 'X' are the trajectories, and the 'y' is the approxiamation
-        # of the derivative for that variable
+        # where the 'X' are the trajectories, and the 'y' is the approximation
+        # of the derivative for that variable. Other ways of manipulating the data
+        # are also possible.
         for state_variable_index, state_variable in enumerate(state_variables) :
             print("Now working on state variable \"%s\"..." % state_variable)
             # prepare all the data in a single np.array
@@ -176,7 +192,9 @@ if __name__ == "__main__" :
             # let's define the name of the output file
             state_variable_ffx_file = os.path.join(system_folder, "variable-%s-ffx.csv" % state_variable)
             
-            # call the methods! an interesting note, if FFXRegressor is called
+            # call the methods!
+            
+            # this is for FFX: an interesting note, if FFXRegressor is called
             # with a Pandas DataFrame as X, it will also automatically obtain the
             # names of the features from the columns; so, let's convert X to a DataFrame
             if not os.path.exists(state_variable_ffx_file) :
@@ -194,10 +212,41 @@ if __name__ == "__main__" :
                     df_models = pd.DataFrame.from_dict(dictionary_models)
                 
                 except SystemExit as ex :
+                    print("FFX failed on state variable \"%s\"!" % state_variable)
                     df_models = pd.DataFrame.from_dict({'equation' : ['Failure'], 
                                                         'error_message' : [str(ex)]})
                 
-                # in any case, save to file
-                df_models.to_csv(state_variable_ffx_file, index=False) 
+                # in any case, save the DataFrame to file
+                df_models.to_csv(state_variable_ffx_file, index=False)
+            
+            else :
+                print("FFX file \"%s\" found, skipping to the next step..." % state_variable_ffx_file)
+                
+        # now, let's try SINDy! This method does not require splitting up the
+        # state variables one by one, or even the trajectories, but only formatting
+        # the data to the appropriate format
+        sindy_file = os.path.join(system_folder, "sindy.csv")
         
+        if os.path.exists(sindy_file) :
+            
+            # multiple trajectories are managed as a list (!) of ndarrays;
+            # they also need to be transposed, as SINDy expects state_variables columns
+            # and a number of rows equal to the size of the 't_train' time
+            X_train_multi = []
+            t_train_multi = []
+            for trajectory in trajectories :
+                X_train_multi.append(np.array(trajectory["y"]).T) # transposed
+                t_train_multi.append(np.array(trajectory["t"]))
+            
+            model = SINDy()
+            model.fit(X_train_multi, t=t_train_multi, multiple_trajectories=True)
+            
+            # create a DataFrame and save to disk
+            df_sindy = pd.DataFrame.from_dict({'state_variable' : state_variables,
+                                               'equation' : [format_equation_syndy(e, state_variables) for e in model.equations(precision=4)],
+                                               'equation_syndy' : model.equations(precision=4)})
+            df_sindy.to_csv(sindy_file, index=False)
+                
+            
+            
         

@@ -7,6 +7,7 @@ with pytorch.
 
 @author: Alberto
 """
+import pathlib
 import odeformer
 from odeformer.model import SymbolicTransformerRegressor
 
@@ -16,4 +17,5 @@ if __name__ == "__main__" :
     model_args = {'beam_size':50, 'beam_temperature':0.1}
     dstr.set_model_args(model_args)
     
+    # apparently ODEFormer only works on Linux...
     
