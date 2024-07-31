@@ -17,3 +17,4 @@
 utils/odeformer.pt
 /utils/ffx/__pycache__
 /utils/ffx/core/__pycache__
+/utils/ffx_ignore
