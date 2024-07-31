@@ -15,3 +15,5 @@
 /src/checking-rossler
 /local_files
 utils/odeformer.pt
+/utils/ffx/__pycache__
+/utils/ffx/core/__pycache__

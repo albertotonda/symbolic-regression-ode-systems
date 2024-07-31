@@ -24,7 +24,7 @@ from sympy import Symbol, sympify
 from sympy.utilities.lambdify import lambdify
 from typing import Dict, List, Union
 
-from ffx import FFXRegressor # install this using the https://github.com/natekupp/ffx/tree/jmmcd-patch-1 branch
+from ffx.api import FFXRegressor # install this using the https://github.com/natekupp/ffx/tree/jmmcd-patch-1 branch
 from pysindy import ConcatLibrary, CustomLibrary, PolynomialLibrary, SINDy, optimizers
 from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 
@@ -121,7 +121,7 @@ if __name__ == "__main__" :
     odebench_json_file_name = "../data/odebench/all_odebench_trajectories.json"
     random_seed = 42
     selected_system_ids = [s for s in range(24, 64)] # if this is an empty list, it just gets all systems
-    results_folder = "../local_results/results-odebench-baselines"
+    results_folder = "../local_results/results-odebench-baselines-test"
     
     # read the file containing all the trajectories
     print("Reading file \"%s\", containing the trajectories..." % odebench_json_file_name)
@@ -227,7 +227,7 @@ if __name__ == "__main__" :
         # the data to the appropriate format
         sindy_file = os.path.join(system_folder, "sindy.csv")
         
-        if os.path.exists(sindy_file) :
+        if not os.path.exists(sindy_file) :
             
             # multiple trajectories are managed as a list (!) of ndarrays;
             # they also need to be transposed, as SINDy expects state_variables columns
