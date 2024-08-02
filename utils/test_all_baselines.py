@@ -18,13 +18,15 @@ import os
 import pandas as pd
 import re as regex
 import sys
+import warnings # to silence annoying warnings
 
 from sklearn.metrics import mean_squared_error, r2_score
 from sympy import Symbol, sympify
 from sympy.utilities.lambdify import lambdify
 from typing import Dict, List, Union
 
-from ffx.api import FFXRegressor # install this using the https://github.com/natekupp/ffx/tree/jmmcd-patch-1 branch
+from ffx.api import FFXRegressor # use local version, all others have issues, https://github.com/natekupp/ffx/tree/jmmcd-patch-1
+from ProGED import EqDisco # this can be installed from repository, pip install git+https://github.com/brencej/ProGED
 from pysindy import ConcatLibrary, CustomLibrary, PolynomialLibrary, SINDy, optimizers
 from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 
@@ -121,7 +123,7 @@ if __name__ == "__main__" :
     odebench_json_file_name = "../data/odebench/all_odebench_trajectories.json"
     random_seed = 42
     selected_system_ids = [s for s in range(24, 64)] # if this is an empty list, it just gets all systems
-    results_folder = "../local_results/results-odebench-baselines-test"
+    results_folder = "../local_results/results-odebench-baselines"
     
     # read the file containing all the trajectories
     print("Reading file \"%s\", containing the trajectories..." % odebench_json_file_name)
@@ -189,7 +191,7 @@ if __name__ == "__main__" :
                 else :
                     y = np.concatenate((y, derivative), axis=0)
             
-            # let's define the name of the output file
+            # let's define the name of the output files
             state_variable_ffx_file = os.path.join(system_folder, "variable-%s-ffx.csv" % state_variable)
             
             # call the methods!
@@ -221,6 +223,7 @@ if __name__ == "__main__" :
             
             else :
                 print("FFX file \"%s\" found, skipping to the next step..." % state_variable_ffx_file)
+                             
                 
         # now, let's try SINDy! This method does not require splitting up the
         # state variables one by one, or even the trajectories, but only formatting
@@ -228,6 +231,7 @@ if __name__ == "__main__" :
         sindy_file = os.path.join(system_folder, "sindy.csv")
         
         if not os.path.exists(sindy_file) :
+            print("Now running (py)SINDy...")
             
             # multiple trajectories are managed as a list (!) of ndarrays;
             # they also need to be transposed, as SINDy expects state_variables columns
@@ -246,7 +250,61 @@ if __name__ == "__main__" :
                                                'equation' : [format_equation_syndy(e, state_variables) for e in model.equations(precision=4)],
                                                'equation_syndy' : model.equations(precision=4)})
             df_sindy.to_csv(sindy_file, index=False)
+        else :
+            print("SINDy file \"%s\" found, skipping to the next step..." % sindy_file)
+            
+        # and finally, here is ProGED. ProGED can perform regression on either
+        # single state variables one by one, or on the whole system at once;
+        # in the ODEFormer publication, they used the second possibility, so
+        # let's proceed in the same way. There is however an important caveat:
+        # ProGED cannot work on two trajectories at the same time, it has to
+        # deal with them one by one (!), then the models created for each
+        # trajectory are merged
+        proged_file = os.path.join(system_folder, "proged.csv")
+        
+        if not os.path.exists(proged_file) :
+            print("Now running ProGED...")
+            
+            # we first need to create a pandas DataFrame with all variables and
+            # time, shaped in the appropriate way; in particular,
+            # we need a column named 't' with the time. So, first let's create
+            # a numpy matrix with all values (times, variable values)
+
+            for trajectory in trajectories :
+                times = np.array(trajectory["t"])
+                state_variable_values = np.array(trajectory["y"]).T # transposed
+ 
+                # hstack puts the two np arrays side by side
+                df_proged = pd.DataFrame(
+                    np.hstack((times.reshape(-1,1), state_variable_values)), 
+                    columns=['t'] + state_variables,
+                )        
+            
+                # then, initialize an instance of the Equation Discoverer
+                ED = EqDisco(data=df_proged,
+                             task_type="differential",
+                             lhs_vars=state_variables, # left-hand-side variables
+                             rhs_vars=["t"] + state_variables, # right-hand-side variables
+                             system_size=len(state_variables),
+                             sample_size=16, # same value as in ODEFormer baseline comparison
+                             generator_template_name="polynomial", # same value as in ODEFormer
+                             strategy_settings={'max_repeat' : 100},
+                             verbosity=1,
+                             )
                 
+                # once the instance is set up, there are two parts: model generation and model fitting
+                try :
+                    with warnings.catch_warnings() :
+                        warnings.simplefilter("ignore") # ignore warnings
+                        
+                        ED.generate_models()
+                        ED.fit_models()
+                        print(ED.get_results())
+                except Exception as e :
+                    print("Error occurred: \"%s\"" % str(e))
+            
+            #sys.exit(0) # TODO remove this
+            
             
             
         
