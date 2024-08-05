@@ -25,8 +25,11 @@ from sympy import Symbol, sympify
 from sympy.utilities.lambdify import lambdify
 from typing import Dict, List, Union
 
-from ffx.api import FFXRegressor # use local version, all others have issues, https://github.com/natekupp/ffx/tree/jmmcd-patch-1
-from ProGED import EqDisco # this can be installed from repository, pip install git+https://github.com/brencej/ProGED
+# FFX should use the local version, all others have issues, closest to working properly is https://github.com/natekupp/ffx/tree/jmmcd-patch-1
+from ffx.api import FFXRegressor
+# ProGED can be installed from repository, pip install git+https://github.com/brencej/ProGED
+from ProGED import EDTask, EqDisco
+from ProGED.parameter_estimation import Estimator
 from pysindy import ConcatLibrary, CustomLibrary, PolynomialLibrary, SINDy, optimizers
 from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 
@@ -269,7 +272,6 @@ if __name__ == "__main__" :
             # time, shaped in the appropriate way; in particular,
             # we need a column named 't' with the time. So, first let's create
             # a numpy matrix with all values (times, variable values)
-
             for trajectory in trajectories :
                 times = np.array(trajectory["t"])
                 state_variable_values = np.array(trajectory["y"]).T # transposed
@@ -278,14 +280,25 @@ if __name__ == "__main__" :
                 df_proged = pd.DataFrame(
                     np.hstack((times.reshape(-1,1), state_variable_values)), 
                     columns=['t'] + state_variables,
-                )        
+                )
+                print(df_proged)
             
-                # then, initialize an instance of the Equation Discoverer
-                ED = EqDisco(data=df_proged,
-                             task_type="differential",
-                             lhs_vars=state_variables, # left-hand-side variables
-                             rhs_vars=["t"] + state_variables, # right-hand-side variables
+                # then, initialize an instance of the Equation Discoverer;
+                # before that, however, we need to instantiate an instance of
+                # EDTask, that describes the task more in detail
+                #task = EDTask(data=df_proged, 
+                #              lhs_vars=state_variables,
+                #              lhs_vars=state_variables,
+                #              rhs_vars=state_variables,
+                #              task_type="differential",
+                #              )
+                
+                ed = EqDisco(#task=task, # this does not seem to work
+                             data=df_proged,
+                             lhs_vars=state_variables,
+                             rhs_vars=["t"] + state_variables,
                              system_size=len(state_variables),
+                             task_type="differential",
                              sample_size=16, # same value as in ODEFormer baseline comparison
                              generator_template_name="polynomial", # same value as in ODEFormer
                              strategy_settings={'max_repeat' : 100},
@@ -293,15 +306,72 @@ if __name__ == "__main__" :
                              )
                 
                 # once the instance is set up, there are two parts: model generation and model fitting
+                proged_models = []
                 try :
-                    with warnings.catch_warnings() :
-                        warnings.simplefilter("ignore") # ignore warnings
-                        
-                        ED.generate_models()
-                        ED.fit_models()
-                        print(ED.get_results())
+                    ed.generate_models()
+                    proged_models = ed.models
+                    print("Model generation successfully completed.")
+                    
                 except Exception as e :
                     print("Error occurred: \"%s\"" % str(e))
+                
+                # check if model generation has been successfully completed
+                if len(proged_models) > 0 :
+                    
+                    # now, the issue here is that model parameter fitting can
+                    # fail spectacularly, and crash the whole thing; but not
+                    # for all models, so we first create an instance of an
+                    # object that fits ProGED model parameters
+                    estimator = Estimator(data=df_proged, settings=ed.estimation_settings)
+                    
+                    # and then, we fit the models one by one, just giving up
+                    # on the models that do not work
+                    proged_fitted_models = []
+                    for model in proged_models :
+                        try :
+                            with warnings.catch_warnings() :
+                                warnings.simplefilter("ignore") # ignore warnings
+                                
+                                print("Trying to fit model:", model)
+                                fitted_model = estimator.fit_one(model)
+                                proged_fitted_models.append(fitted_model)
+                                print("Model successfully fitted.")
+                        except Exception as e :
+                            print("Error occurred: \"%s\", skipping to the next ProGED model..." % str(e))
+                            proged_fitted_models.append(["" for i in range(0, len(state_variable))])
+                    
+                    print("ProGED fitted models:", proged_fitted_models)
+                    
+                    # now, at the end of this step, we should build a DataFrame
+                    # with all the results;
+                    dictionary_results = {sv : [] for sv in state_variables}
+                    for sv in state_variables :
+                        dictionary_results[sv + "_parametrized"] = []
+                        
+                    for i in range(0, len(proged_models)) :
+                        for j in range(0, len(state_variables)) :
+                            sv = state_variables[j]
+                            dictionary_results[sv].append(str(proged_models[i].expr[j]))
+                            
+                            # now, here a fitted model can be an instance of Model containing
+                            # several expressions, or just a list of strings; so
+                            # we first need to check that
+                            model_fitted = proged_fitted_models[i]
+                            #print("Model #%d, fitted: %s" % (i, str(model_fitted)))
+                            
+                            model_fitted_sv = None
+                            if not isinstance(model_fitted, list) :
+                                model_fitted_sv = str(model_fitted.full_expr()[j])
+                            else :
+                                model_fitted_sv = str(model_fitted[j])
+                            
+                            dictionary_results[sv + "_parametrized"].append(model_fitted_sv)
+                    
+                    print("Saving results to file \"%s\"..." % proged_file)
+                    df_proged_results = pd.DataFrame.from_dict(dictionary_results)
+                    df_proged_results.to_csv(proged_file, index=False)
+                    
+                sys.exit(0) # TODO remove this
             
             #sys.exit(0) # TODO remove this
             
