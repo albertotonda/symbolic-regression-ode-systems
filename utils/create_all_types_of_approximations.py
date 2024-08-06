@@ -19,7 +19,7 @@ from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 # using again the same dirty, deprecated trick to import the local script which
 # creates the approximation based on the forward Euler's method
 sys.path.append("../src")
-from explicit_euler_method import apply_euler_method
+from explicit_euler_method import apply_euler_method, apply_improved_euler_method
 
 if __name__ == "__main__" :
     
@@ -30,6 +30,9 @@ if __name__ == "__main__" :
     # in the ODEFormer/ODEBench paper
     finite_difference_orders = [2, 3, 4]
     smoother_window_lengths = [None, 15]
+    # these are possible values for delta_t in the approximation based on the
+    # forward Euler's method
+    delta_t_euler_values = [1, 2, 3, 4, 5]
     
     # read JSON file
     print("Reading file \"%s\", containing the trajectories..." % odebench_json_file_name)
@@ -95,5 +98,12 @@ if __name__ == "__main__" :
                     df_dy_dt.to_csv(os.path.join(system_folder, df_dy_dt_file_name + ".csv"), index=False)
             
             # and then, apply the forward Euler's method approximation to get F    
+            for delta_t in delta_t_euler_values :
+                df_euler = apply_improved_euler_method(df_trajectory, delta_t=delta_t)
+                df_euler.to_csv(os.path.join(system_folder, 
+                                             "trajectory-%d-euler-delta_t%d.csv" % 
+                                             (trajectory_index, delta_t)), index=False)
+            
+            # this is just a check
             df_euler = apply_euler_method(df_trajectory)
-            df_euler.to_csv(os.path.join(system_folder, "trajectory-%d-euler.csv" % trajectory_index), index=False)
+            df_euler.to_csv(os.path.join(system_folder, "trajectory-%d-euler-comparison.csv" % trajectory_index), index=False)

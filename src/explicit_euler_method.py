@@ -59,6 +59,43 @@ def apply_euler_method(df, delta_t=1) :
 
     return df_euler
 
+def apply_improved_euler_method(df, delta_t=1) :
+    """
+    The apply_euler_method function does not seem to work properly for values of
+    delta_t > 1 (basically it always returns the same result, no matter the delta_t);
+    in order to avoid breaking working code, here is a variant that tries to fix
+    the issue.
+    """
+    # TODO: we could still check whether the 't' column exists, and raise an
+    # Exception if it doesn't
+    
+    # create the new columns names for the dictionary that will later
+    # be converted into a dataframe; for each column 'c', we add a 'F_c'
+    dict_euler = { "F_" + c : [] for c in df.columns if c != "t"}
+    for c in df.columns :
+        dict_euler[c] = []
+    dict_euler["delta_t"] = []
+
+    # iterate over the dataset, filling the dictionary
+    for starting_index in range(0, df.shape[0]) :
+        # the starting_index is the reference point; the end_index is the "following"
+        # reference time step that will be used to compute the time and value differences
+        for end_index in range(starting_index, min(starting_index+delta_t+1, df.shape[0])) :
+            # copy values from the original columns of the data set; also compute
+            # the new values for the F_* functions, for each variable except 't'
+            for c in df.columns :
+                dict_euler[c].append(df[c].values[starting_index])
+                if c != "t" :
+                    dict_euler["F_" + c].append(df[c].values[end_index] - df[c].values[starting_index])
+            
+            # add value for delta_t
+            dict_euler["delta_t"].append(df["t"].values[end_index] - df["t"].values[starting_index])
+
+    df_euler = pd.DataFrame.from_dict(dict_euler)
+
+    return df_euler
+    
+
 def main() :
 
     # some imports here, as they could be potentially used only in this main,
