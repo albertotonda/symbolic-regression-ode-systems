@@ -371,7 +371,7 @@ if __name__ == "__main__" :
                     df_proged_results = pd.DataFrame.from_dict(dictionary_results)
                     df_proged_results.to_csv(proged_file, index=False)
                     
-                sys.exit(0) # TODO remove this
+                #sys.exit(0) # TODO remove this
             
             #sys.exit(0) # TODO remove this
             

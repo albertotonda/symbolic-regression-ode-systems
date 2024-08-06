@@ -39,15 +39,18 @@ def main() :
     
     # hard-coded values
     odebench_file_name = "../data/odebench/all_odebench_trajectories.json"
+    odebench_file_name = "../data/odebench/selected_equations_300_points_trajectories.json"
     # specify id of the system we want to analyze; the worst results are with systems
     # 11, 11, 26, 41, 48, 49, 54, 55, 56, 57, 58, 59 and 61
-    system_id = 3
+    system_id = 11
     # also select one of the two trajectories in the system, trajectory 0 or 1
     trajectory_index = 1
     # this is optional, it's a dictionary of alternative candidate for F_y 
     # besides the ground truth, one for each state variable
     #alternative_equations = {'x_0' : 'Delta_t*(-x_0 + sin(x_0))*(sqrt(sin(sin(exp((-Delta_t + x_0)*(-x_0 - 0.1215392))))) + 5.1706514)'}
-    alternative_equations = {'x_0' : '1.2608093 * sin(sin(Delta_t / (1.5884168 / x_0)) / 1.1236044)'}
+    #alternative_equations = {'x_0' : '1.2608093 * sin(sin(Delta_t / (1.5884168 / x_0)) / 1.1236044)'}
+    #alternative_equations = {'x_0' : '((x_0 * -0.35642046) + 0.2993954) * Delta_t'}
+    alternative_equations = {'x_0' : 'Delta_t * (-5.201244*x_0 + 5.14734730533612 * sin(x_0))'}
     
     # set a nice style for plots
     sns.set_style('darkgrid')
