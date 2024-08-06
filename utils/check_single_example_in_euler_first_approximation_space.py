@@ -39,7 +39,7 @@ def main() :
     
     # hard-coded values
     odebench_file_name = "../data/odebench/all_odebench_trajectories.json"
-    odebench_file_name = "../data/odebench/selected_equations_300_points_trajectories.json"
+    #odebench_file_name = "../data/odebench/selected_equations_300_points_trajectories.json"
     # specify id of the system we want to analyze; the worst results are with systems
     # 11, 11, 26, 41, 48, 49, 54, 55, 56, 57, 58, 59 and 61
     system_id = 11
