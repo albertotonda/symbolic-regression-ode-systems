@@ -26,7 +26,7 @@ if __name__ == "__main__" :
     results_folder = "../local_results/approximation-comparison-sr"
     # ids of the systems that we are actually going to experiment on;
     # there are a total of 63 different systems
-    systems_to_run = [1]
+    systems_to_run = [i for i in range(1, 64)]
     # random seed for all random number generators
     random_seed = 42
     
@@ -100,6 +100,6 @@ if __name__ == "__main__" :
                     sr.fit(df_X, df_y)
                     
                     print("Saving results to file \"%s\"..." % result_file_name)
-                    sr.equations.to_csv(result_file_name, index=False)
+                    sr.equations_.to_csv(result_file_name, index=False)
                 else :
                     print("Results file for target \"%s\" found, skipping to the next..." % target)
