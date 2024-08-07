@@ -19,3 +19,4 @@ utils/odeformer.pt
 /utils/ffx/core/__pycache__
 /utils/ffx_ignore
 /data/odebench/systems
+utils/..tex

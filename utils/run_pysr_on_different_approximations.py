@@ -101,5 +101,12 @@ if __name__ == "__main__" :
                     
                     print("Saving results to file \"%s\"..." % result_file_name)
                     sr.equations_.to_csv(result_file_name, index=False)
+                    
+                    # it is also interesting to keep track of the 'best' equation
+                    # that PySR would normally choose on the Pareto front
+                    best_equation_file_name = os.path.join(system_result_folder, "best-equation" + base_file_name[:-4] + "-" + target + ".tex")
+                    with open(best_equation_file_name, "w") as fp :
+                        fp.write(sr.latex(precision=10))
+                    
                 else :
                     print("Results file for target \"%s\" found, skipping to the next..." % target)
