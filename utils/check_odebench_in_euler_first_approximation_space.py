@@ -232,6 +232,10 @@ def main() :
             df_euler = apply_euler_method(df_trajectory)
             df_euler.to_csv(os.path.join(system_directory, "trajectory-%d-euler.csv" % trajectory_index), index=False)
             
+            # TODO actually, we can take this opportunity to also test the other
+            # approximation! and we could check multiple versions of the same
+            # approximation, taking into account multiple points
+            
             # for each state variable y, obtain the F_y known ground truth form
             for state_variable, equation in equations.items() :
                 delta_t = sympy.Symbol("Delta_t")

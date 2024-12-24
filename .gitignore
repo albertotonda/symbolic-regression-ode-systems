@@ -20,3 +20,5 @@ utils/odeformer.pt
 /utils/ffx_ignore
 /data/odebench/systems
 utils/..tex
+/utils/.ipynb_checkpoints
+/utils/__pycache__

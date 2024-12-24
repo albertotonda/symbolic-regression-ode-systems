@@ -22,6 +22,11 @@ Ideally, a lot of experiments can be run, changing:
 	- "Similarity Between Two Stochastic Differential Systems"
 	- "A General Metric for the Similarity of Both Stochastic and Deterministic System Dynamics"
 
+## 2024-11-21
+Now, the next steps for the base comparison between different data transformation is:
+1. compute data transformations (both F_x and delta_x) with all possible hyperparameter variations
+2. check the fitting of the ground-truth solution against the data 
+
 ## 2024-07-27
 So, a thorough run on ODEBench and some extra experiments show that the issue is related to the size of $\Delta_t$. The same value that works well for some systems works awfully for others; still, reducing $\Delta_t$ always improves the results. I wonder if there are some huge errors only for a few points, and maybe what should be really optimized is the median error, instead of MSE.
 
