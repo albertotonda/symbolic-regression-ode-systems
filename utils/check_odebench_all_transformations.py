@@ -24,11 +24,16 @@ import seaborn as sns
 import sympy
 import sys
 
-from sklearn.metrics import r2_score
+from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 from sympy.utilities.lambdify import lambdify
 
 # local scripts
 from common import close_logging, initialize_logging, slugify
+
+# local package(s), imported from another directory
+# using a 'parent package' would be cleaner; but for the moment, let's use a brutal way
+sys.path.append("../src/")
+from explicit_euler_method import apply_improved_euler_method
 
 def add_noise(dictionary_trajectory, noise_level, prng) :
     """
@@ -64,6 +69,99 @@ def plot_trajectory(system_name, dictionary_trajectory, trajectory_file_name) :
     
     return
 
+def apply_deltax_method(df_trajectory, order=2, smoothing=None) :
+    """
+    This is just a wrapper for pysindy's method.
+    """
+    # first, let's extract the necessary information from the DataFrame
+    state_variables = [c for c in df_trajectory.columns if c != 't']
+    
+    # instantiate pysindy's object for differentiation
+    fd = None
+    if smoothing is None :
+        fd = FiniteDifference(order=order)
+    # obtain numpy array
+    dx_dt = fd._differentiate(df_trajectory[state_variables].values, 
+                                          df_trajectory['t'].values)
+    
+    # re-transform everything to a DataFrame
+    dictionary_deltax = df_trajectory.to_dict(orient='list')
+    for i in range(0, dx_dt.shape[1]) :
+        dictionary_deltax[state_variables[i] + "_deltax"] = dx_dt[:,i]
+    
+    df_deltax = pd.DataFrame.from_dict(dictionary_deltax)
+    
+    return df_deltax
+
+def compare_data_transformations(equations, dictionary_trajectory, trajectory_name) :
+    """
+    Compute 'ground truth' form of the equations using the different transformations,
+    and compare them against the transformed data
+    """
+    # this is a dictionary of data transformations; key -> function, args, kwargs
+    data_transformations = {
+        'F_x_deltat_1' : {'function' : apply_improved_euler_method, 'kwargs' : {'delta_t' : 1}},
+        'F_x_deltat_2' : {'function' : apply_improved_euler_method, 'kwargs' : {'delta_t' : 2}},
+        'F_x_deltat_3' : {'function' : apply_improved_euler_method, 'kwargs' : {'delta_t' : 3}},
+  
+        'deltax_order_1' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 1}},
+        'deltax_order_2' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 2}},
+        'deltax_order_3' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 3}},
+        }
+    
+    state_variables = [k for k in dictionary_trajectory if k != 't']
+    t = dictionary_trajectory['t']
+    
+    for dt in data_transformations :
+        
+        if dt.startswith('F_x') :
+            df = pd.DataFrame.from_dict(dictionary_trajectory)
+            function = data_transformations[dt]['function']
+            kwargs = data_transformations[dt]['kwargs']
+            df_euler = function(df, **kwargs)
+            
+            # get the ground truth equations, compute values
+            for state_variable, equation in equations.items() :
+                delta_t = sympy.Symbol("Delta_t")
+                euler_equation = sympy.Mul(delta_t, equation, evaluate=False)
+                
+                # prepare symbols and values for the lambdified equation
+                equation_symbols = []
+                for c in df_euler.columns :
+                    if c == "delta_t" :
+                        equation_symbols.append(sympy.sympify("Delta_t"))
+                    else :
+                        equation_symbols.append(sympy.sympify(c))
+                symbol_values = [df_euler[c].values for c in df_euler.columns]
+                
+                # obtain predicted values
+                equation_values = lambdify(equation_symbols, 
+                                           euler_equation)(*symbol_values)
+                
+                # store the predicted values as additional columns
+                df_euler["F_" + state_variable + "_pred"] = equation_values
+            
+            df_euler.to_csv(trajectory_name + "_" + dt + ".csv", index=False)
+            
+        elif dt.startswith('deltax') :
+            df = pd.DataFrame.from_dict(dictionary_trajectory)
+            function = data_transformations[dt]['function']
+            kwargs = data_transformations[dt]['kwargs']
+            df_deltax = function(df, **kwargs)
+            
+            # get the ground truth equations, compute values
+            for state_variable, equation in equations.items() :
+                equation_symbols = [c for c in df_deltax.columns 
+                                    if not c.endswith("_deltax")]
+                symbol_values = [df_deltax[c].values for c in equation_symbols]
+                equation_values = lambdify(equation_symbols, equation)(*symbol_values)
+                
+                df_deltax[state_variable + "_deltax_pred"] = equation_values
+                
+            df_deltax.to_csv(trajectory_name + "_" + dt + ".csv", index=False)
+            
+    return
+
 def main() :
     # some hard-coded values
     # source file, in JSON
@@ -71,7 +169,7 @@ def main() :
     # results folder
     results_directory = "../local_results/" + os.path.basename(__file__)[:-3]
     # noise levels (check ODEFormer paper)
-    noise_levels = [0.0, 0.01]
+    noise_levels = [0.0, 0.01, 0.05]
     # we also need a pseudo-random number generator
     random_seed = 42
     prng = np.random.default_rng(random_seed)
@@ -133,16 +231,21 @@ def main() :
                     dictionary_trajectory = add_noise(dictionary_trajectory, noise_level, prng)
                 
                 # save file with trajectory data
-                trajectory_file_name = os.path.join(system_directory, 
+                trajectory_name = os.path.join(system_directory, 
                                                     "trajectory-%d-noise-%.2f" % (trajectory_index, noise_level))
                 df_trajectory = pd.DataFrame.from_dict(dictionary_trajectory)
-                df_trajectory.to_csv(trajectory_file_name + ".csv", index=False)
+                df_trajectory.to_csv(trajectory_name + ".csv", index=False)
                 
-                # also plot the trajectorys
+                # also plot the trajectory
                 plot_trajectory(os.path.basename(system_directory),
                                 dictionary_trajectory, 
-                                trajectory_file_name + ".png")
+                                trajectory_name + ".png")
                 
+                # and now, perform data transformation and compare against
+                # the ground truth
+                compare_data_transformations(equations,
+                                             dictionary_trajectory, 
+                                             trajectory_name)
                 
     # close log
     close_logging(logger)
