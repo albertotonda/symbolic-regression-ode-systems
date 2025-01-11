@@ -25,6 +25,13 @@ import sympy
 import sys
 
 from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
+
+# these two lines are for denoising, but I need to think more on how to apply it
+#from sklearn.gaussian_process import GaussianProcessRegressor
+#from sklearn.gaussian_process.kernels import ConstantKernel, RBF, WhiteKernel
+
+from scipy.signal import savgol_filter # used to smoothen data
+
 from sympy.utilities.lambdify import lambdify
 
 # local scripts
@@ -69,20 +76,24 @@ def plot_trajectory(system_name, dictionary_trajectory, trajectory_file_name) :
     
     return
 
-def apply_deltax_method(df_trajectory, order=2, smoothing=None) :
+def apply_deltax_method(df_trajectory, order=2, smoothing=None, denoising=None) :
     """
     This is just a wrapper for pysindy's method.
     """
     # first, let's extract the necessary information from the DataFrame
     state_variables = [c for c in df_trajectory.columns if c != 't']
+    X = df_trajectory[state_variables].values
+    t = df_trajectory['t'].values
     
     # instantiate pysindy's object for differentiation
     fd = None
     if smoothing is None :
         fd = FiniteDifference(order=order)
+    else :
+        fd = SmoothedFiniteDifference(order=order, smoother_kws=smoothing)
+        
     # obtain numpy array
-    dx_dt = fd._differentiate(df_trajectory[state_variables].values, 
-                                          df_trajectory['t'].values)
+    dx_dt = fd._differentiate(X, t)
     
     # re-transform everything to a DataFrame
     dictionary_deltax = df_trajectory.to_dict(orient='list')
@@ -93,6 +104,30 @@ def apply_deltax_method(df_trajectory, order=2, smoothing=None) :
     
     return df_deltax
 
+def apply_euler_method_smoothing(df_trajectory, order=1, smoothing=None) :
+    """
+    This is just a wrapper around Euler's method. However, we can also add some
+    smoothing, using the same functions as pysindy's.
+    """
+    if smoothing is not None :
+        # extract the values that need to be smoothed
+        df_smoothed = df_trajectory.copy()
+        features = [c for c in df_smoothed.columns if c != 't']
+        X = df_smoothed[features].values
+        
+        # use pysindy's stuff to manage the smoothing
+        smoothing["polyorder"] = 3
+        smoothing["axis"] = 0
+        X_smoothed = savgol_filter(X, **smoothing)
+        
+        # rearrange the dataframe
+        df_smoothed[features] = X_smoothed
+        df_trajectory = df_smoothed
+    
+    df_euler = apply_improved_euler_method(df_trajectory, delta_t=order)
+    
+    return df_euler
+
 def compare_data_transformations(equations, dictionary_trajectory, trajectory_name) :
     """
     Compute 'ground truth' form of the equations using the different transformations,
@@ -100,14 +135,48 @@ def compare_data_transformations(equations, dictionary_trajectory, trajectory_na
     """
     # this is a dictionary of data transformations; key -> function, args, kwargs
     data_transformations = {
-        'F_x_deltat_1' : {'function' : apply_improved_euler_method, 'kwargs' : {'delta_t' : 1}},
-        'F_x_deltat_2' : {'function' : apply_improved_euler_method, 'kwargs' : {'delta_t' : 2}},
-        'F_x_deltat_3' : {'function' : apply_improved_euler_method, 'kwargs' : {'delta_t' : 3}},
+        'F_x_deltat_1' : {'function' : apply_euler_method_smoothing, 'kwargs' : {'delta_t' : 1}},
+        'F_x_deltat_2' : {'function' : apply_euler_method_smoothing, 'kwargs' : {'delta_t' : 2}},
+        'F_x_deltat_3' : {'function' : apply_euler_method_smoothing, 'kwargs' : {'delta_t' : 3}},
+        
+        'F_x_deltat_1_smoothing' : {'function' : apply_euler_method_smoothing, 'kwargs' : {'delta_t' : 1, 'smoothing' : {'window_length' : 15}}},
+        'F_x_deltat_2_smoothing' : {'function' : apply_euler_method_smoothing, 'kwargs' : {'delta_t' : 2, 'smoothing' : {'window_length' : 15}}},
+        'F_x_deltat_3_smoothing' : {'function' : apply_euler_method_smoothing, 'kwargs' : {'delta_t' : 3, 'smoothing' : {'window_length' : 15}}},
   
         'deltax_order_1' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 1}},
         'deltax_order_2' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 2}},
         'deltax_order_3' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 3}},
+        
+        'deltax_order_2_smoothed_05' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 2, 'smoothing' : {'window_length' : 5}}},
+        'deltax_order_2_smoothed_11' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 2, 'smoothing' : {'window_length' : 11}}},
+        'deltax_order_2_smoothed_15' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 2, 'smoothing' : {'window_length' : 15}}},
+        'deltax_order_2_smoothed_21' : {'function' : apply_deltax_method, 'kwargs' : {'order' : 2, 'smoothing' : {'window_length' : 21}}},
         }
+    
+    # we can also build the array of data transformations dynamically
+    techniques = ['deltax', 'F_x']
+    orders = [1, 2, 3, 4, 5]
+    window_lengths = [0, 5, 11, 15, 21, 25]
+    
+    data_transformations = {}
+    for t in techniques :
+        for o in orders :
+            for w in window_lengths :
+                key = t + "_order_" + str(o)
+                if w != 0 :
+                    key += "_smoothed_w" + str(w)
+                    
+                arguments = {}
+                arguments['function'] = apply_deltax_method
+                if t == 'F_x' :
+                    arguments['function'] = apply_euler_method_smoothing
+                    
+                arguments['kwargs'] = {}
+                arguments['kwargs']['order'] = o
+                if w != 0 :
+                    arguments['kwargs']['smoothing'] = {'window_length' : w}
+                    
+                data_transformations[key] = arguments
     
     state_variables = [k for k in dictionary_trajectory if k != 't']
     t = dictionary_trajectory['t']

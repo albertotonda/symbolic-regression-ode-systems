@@ -22,3 +22,4 @@ utils/odeformer.pt
 utils/..tex
 /utils/.ipynb_checkpoints
 /utils/__pycache__
+/figures
