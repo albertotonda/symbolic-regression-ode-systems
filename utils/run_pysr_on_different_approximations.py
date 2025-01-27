@@ -14,6 +14,7 @@ There are two types of approximations, with some variants/hyperparameters:
 import os
 import pandas as pd
 import re as regex
+import sys
 
 from pysr import PySRRegressor
 
@@ -21,19 +22,30 @@ if __name__ == "__main__" :
    
     # hard-coded values 
     # this is the root folder with all the data for all systems
-    data_folder = "../data/odebench/systems"
-    # folder with the results
-    results_folder = "../local_results/approximation-comparison-sr"
-    # ids of the systems that we are actually going to experiment on;
-    # there are a total of 63 different systems
-    systems_to_run = [i for i in range(1, 64)]
+    #data_folder = "../data/odebench/systems"
+    # this folder below has been obtained through another script
+    data_folder = "../local_results/check_odebench_all_transformations/"
+    # folder where the results will be written to
+    results_folder = "../local_results/approximation-comparison-sr-modified"
     # random seed for all random number generators
     random_seed = 42
+
+    # ids of the systems that we are actually going to experiment on;
+    # there are a total of 63 different systems
+    #systems_to_run = [i for i in range(1, 64)]
+    systems_to_run = [55, 59, 61]
+
+    # hyperparameter settings for transformations and experiments
+    noise_level = 0.0
+    order_Fx = 1
+    window_Fx = None
+    order_deltax = 4
+    window_deltax = None
     
     # TODO some hyperparameter settings for PySRRegressor
     
     # let's start by listing all subdirectories inside the main folder
-    system_folders = [os.path.join(data_folder, f) for f in os.listdir(data_folder) if f.find("system") != -1]
+    system_folders = [os.path.join(data_folder, f) for f in os.listdir(data_folder) if os.path.isdir(os.path.join(data_folder, f))]
     print("Found a total of %d folders containing trajectory files!" % len(system_folders))
     
     # create a list of tuples: system id as an integer, and its path, using regex to extract id
@@ -55,10 +67,22 @@ if __name__ == "__main__" :
         
         # find all approximation files
         all_csv_files = [os.path.join(system_folder, f) for f in os.listdir(system_folder)
+
                                    if f.endswith(".csv")]
+        # select only files with the correct hyperparameters
+        dydt_approximation_files = [f for f in all_csv_files if f.find("deltax") != -1
+                                    and f.find("noise-%.2f" % noise_level) != -1
+                                    and f.find("order_%d" % order_deltax) != -1]
+        euler_approximation_files = [f for f in all_csv_files if f.find("F_x") != -1
+                                     and f.find("noise-%.2f" % noise_level) != -1
+                                     and f.find("order_%d" % order_Fx) != -1]
         
-        dydt_approximation_files = [f for f in all_csv_files if f.find("order") != -1]
-        euler_approximation_files = [f for f in all_csv_files if f.find("euler") != -1 and f.find("comparison") == -1]
+        # the part with the window is the hardest to check (regex or awkward ifs?)
+        if window_deltax is None :
+            dydt_approximation_files = [f for f in dydt_approximation_files
+                                        if f.find("smoothed") == -1]
+            euler_approximation_files = [f for f in euler_approximation_files
+                                        if f.find("smoothed") == -1]
         
         print("dy/dt approximation files:", dydt_approximation_files)
         print("Euler's approximation files:", euler_approximation_files)
@@ -72,8 +96,12 @@ if __name__ == "__main__" :
             df_approximation = pd.read_csv(dydt_approximation_file)
             
             # targets all have recognizable names
-            target_columns = [c for c in df_approximation.columns if c.endswith("_dxdt") or c.startswith("F_")]
-            feature_columns = [c for c in df_approximation.columns if c not in target_columns]
+            target_columns = [c for c in df_approximation.columns 
+                              if (c.endswith("_deltax") or c.startswith("F_"))
+                              and not c.endswith("_pred")]
+            feature_columns = [c for c in df_approximation.columns 
+                               if c not in target_columns
+                               and not c.endswith("_pred")]
             
             # iterate over all possible targets
             for target in target_columns :
@@ -81,7 +109,8 @@ if __name__ == "__main__" :
                 
                 # check if the result file already exists, to avoid re-running experiments
                 if not os.path.exists(result_file_name) :
-                    print("Now running PySR for target \"%s\"..." % target)
+                    print("Now running PySR for target \"%s\", %s=f(%s)..." % 
+                          (target, target, str(feature_columns)))
                     df_X = df_approximation[feature_columns]
                     df_y = df_approximation[target]
                     
@@ -104,7 +133,7 @@ if __name__ == "__main__" :
                     
                     # it is also interesting to keep track of the 'best' equation
                     # that PySR would normally choose on the Pareto front
-                    best_equation_file_name = os.path.join(system_result_folder, "best-equation" + base_file_name[:-4] + "-" + target + ".tex")
+                    best_equation_file_name = os.path.join(system_result_folder, "best-equation-" + base_file_name[:-4] + "-" + target + ".tex")
                     with open(best_equation_file_name, "w") as fp :
                         fp.write(sr.latex(precision=10))
                     
