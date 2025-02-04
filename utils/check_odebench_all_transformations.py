@@ -217,14 +217,17 @@ def apply_dcode_method(df_trajectory, r=-1, sigma_in=0.1,
         c = (y_v * weight[:, None]).T @ g_dot
         x_hat = y_v # the 
         
-        print("Shapes of the ingredients:")
-        print("x_hat=", x_hat.shape)
-        print("c=", c.shape)
-        print("g=", g.shape)
-        print("g_dot=", g_dot.shape)
+        #print("Shapes of the ingredients:")
+        #print("x_hat=", x_hat.shape)
+        #print("c=", c.shape)
+        #print("g=", g.shape)
+        #print("g_dot=", g_dot.shape)
         
         # let's add pieces to the dictionary!
         dictionary_dcode[state_variable + '_x_hat'] = x_hat
+        
+        # also add the integration weights
+        dictionary_dcode[state_variable + "_integration_weights"] = weight
         
         # the other 'ingredients' actually have multiple parts
         for g_index in range(0, g.shape[1]) :
@@ -235,17 +238,54 @@ def apply_dcode_method(df_trajectory, r=-1, sigma_in=0.1,
         
         for c_index in range(0, c.shape[1]) :
             dictionary_dcode[state_variable + "_c_%d" % c_index] = c[:,c_index]
-        
-        # this part below was the original re-implementation from the D-CODE repo
-        #else :
-        #    # TODO complete
-         #   # hypothesis on noise level
-         #   noise_sigma = smoothing['noise_sigma']
-         #   pca = gppca.GPPCA0(r, y_v, t, noise_sigma, sigma_out=None, sigma_in=sigma_in)
+            
+    df_dcode = pd.DataFrame.from_dict(dictionary_dcode)
     
-    df_dcode=pd.DataFrame.from_dict(dictionary_dcode)
     return df_dcode
 
+def compute_dcode_fitness_function(equation, symbols, x_hat, integration_weights, c, g) :
+    """
+    This function implements the computation of the DCODE fitness value for a
+    target equation.
+    - equation is equation in symbolic form (sympy)
+    - x_hat is the original trajectory with shape (time_instants x features);
+      IMPORTANT NOTE: features need to appear in the same order as the symbols
+      in the symbolic equation, normally the original order of columns in the
+      CSV file used for the experiments (x_0, x_1, ..., x_N)
+    - symbols is a list of sympy symbols contains all symbols in the equations
+    - c are the precomputed values of the DCODE term C, shape (time_instants x n_support_functions)
+    - g are the precomputed values of the DCODE term g, shape (time_instants x n_support_functions)
+    """
+    #print("Shape of x_hat:", x_hat.shape)
+    #print("Shape of integration_weights:", integration_weights.shape)
+    #print("Shape of c:", c.shape)
+    #print("Shape of g:", g.shape)
+    # get the values of the symbols in the equation (in the base case scenario,
+    # this should be completely equivalent to x_hat, with maybe a different shape,
+    # but just in case, let's recompute it here)
+    symbol_values = [x_hat[:,i] for i in range(0, x_hat.shape[1])]
+    
+    # obtain the value of the function
+    y_hat = lambdify(symbols, equation)(*symbol_values)
+    #print("Shape of y_hat:", y_hat.shape)
+    partial = (y_hat * integration_weights[:, None]).T
+    #print("Shape of (y_hat * integration_weights).T", partial.shape)
+    
+    # let's compute the c_hat values for the current equation
+    c_hat = (y_hat * integration_weights[:, None]).T @ g
+    print("c_hat:", c_hat)
+    
+    #print("Shape of c_hat:", c_hat.shape)
+    #print("Shape of c:", c.shape)
+    
+    # fitness value (the original formula also had weights, but if I am not 
+    # mistaken the original code set them all at [1.0, ..., 1.0])
+    sample_weight = np.ones(y_hat.shape)
+    fitness_value = np.sum((c + c_hat) ** 2 * sample_weight[:, None]) / np.sum(sample_weight)
+    #fitness_value = np.sum((c + c_hat) ** 2)
+    
+    return fitness_value
+    
 def compare_data_transformations(equations, dictionary_trajectory, trajectory_name) :
     """
     Compute 'ground truth' form of the equations using the different transformations,
@@ -356,12 +396,36 @@ def compare_data_transformations(equations, dictionary_trajectory, trajectory_na
                 
             df_deltax.to_csv(trajectory_name + "_" + dt + ".csv", index=False)
             
-        elif dt.startswith("C_x") :
+        elif dt.startswith('C_x') :
             df = pd.DataFrame.from_dict(dictionary_trajectory)
             function = data_transformations[dt]['function']
             kwargs = data_transformations[dt]['kwargs']
             df_dcode = function(df, **kwargs)
             
+            for state_variable, equation in equations.items() :
+                equation_symbols = [v for v in equations] # all state variables
+                
+                c = df_dcode[[c for c in df_dcode.columns 
+                             if c.startswith(state_variable + "_c_")]].values
+                g = df_dcode[[c for c in df_dcode.columns 
+                             if c.startswith(state_variable + "_g_") and
+                             c.find("g_dot") == -1]].values
+                x_hat = df_dcode[[c for c in df_dcode.columns
+                                  if c.endswith("_x_hat")]].values
+                integration_weights = df_dcode[state_variable + "_integration_weights"].values
+                
+                dcode_fitness_value = compute_dcode_fitness_function(equation, 
+                                                                     equation_symbols, 
+                                                                     x_hat, 
+                                                                     integration_weights, 
+                                                                     c, 
+                                                                     g)
+                
+                # now, differently from deltax and Fx, Cx does not compute a
+                # target value for each entry in the table, but just one general
+                # value; so, let's just have a column with the C_x value repeated
+                df_dcode["C_x_" + state_variable] = [dcode_fitness_value] * df_dcode.shape[0]
+                        
             df_dcode.to_csv(trajectory_name + "_" + dt + ".csv", index=False)
             
             
