@@ -114,8 +114,9 @@ def main_odebench() :
     # and all that jazz for the original trajectory
     
     # hard-coded values
-    odebench_file = "../data/odebench/all_odebench_trajectories.json"
-    #odebench_file = "../data/odebench/selected_equations_600_points_trajectories.json"
+    #odebench_file = "../data/odebench/all_odebench_trajectories.json"
+    #odebench_file = "../data/odebench/selected_equations_cx_600_points_solutions.json"
+    odebench_file = "../data/odebench/selected_equations_cx_150_points_solutions_max_t_20.json"
     output_folder = "../local_results/" + os.path.basename(__file__)[:-3]
     output_file = "c_x_odebench.csv"
     
