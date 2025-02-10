@@ -114,9 +114,9 @@ def main_odebench() :
     # and all that jazz for the original trajectory
     
     # hard-coded values
-    #odebench_file = "../data/odebench/all_odebench_trajectories.json"
+    odebench_file = "../data/odebench/all_odebench_trajectories.json"
     #odebench_file = "../data/odebench/selected_equations_cx_600_points_solutions.json"
-    odebench_file = "../data/odebench/selected_equations_cx_150_points_solutions_max_t_20.json"
+    #odebench_file = "../data/odebench/selected_equations_cx_150_points_solutions_max_t_20.json"
     output_folder = "../local_results/" + os.path.basename(__file__)[:-3]
     output_file = "c_x_odebench.csv"
     
@@ -140,7 +140,7 @@ def main_odebench() :
                           }
     
     for n_basis in n_basis_hyperparameters :
-        for system in odebench :
+        for system in odebench : # TODO remove this! It's just for debugging
             print("System %d: %s" % (system["id"], system["eq_description"]))
             
             # get equations
@@ -225,6 +225,8 @@ def main_odebench() :
                 
                 print("%s -> C_x fitness value for all trajectories: %.4e" %
                       (state_variable, c_x_fitness_value))
+                #print("c has shape:", c.shape)
+                #print("sum of weights is:", np.sum(sample_weight))
                 
                 # also compute partial c_x value for each trajectory
                 all_c_x_differences = c + c_hat

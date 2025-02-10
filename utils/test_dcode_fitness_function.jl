@@ -111,7 +111,19 @@ for system in odebench
         c_x_fitness_value = sum((c + c_hat) .^ 2 .* sample_weight) / sum(sample_weight)
         
         println("$state_variable -> C_x fitness value for all trajectories: $(round(c_x_fitness_value, digits=10))")
+        #println("c has shape $(size(c))")
+        #println("sum of sample_weight is $(sum(sample_weight))")
+
+        # let's get the fitness for each trajectory
+        # the fitness associated to each trajectory is correct (!) but the sum is wrong by a factor of 2.0,
+        # so there is probably a mistake on line 111 (maybe the sum() function works differently than what I am expecting)
+        all_c_x_differences = (c + c_hat)
+        for i in 1:size(all_c_x_differences, 1)
+            c_x_variable = sum(all_c_x_differences[i,:].^2)/ size(all_c_x_differences,2)
+            println("\t- For initial conditions #$i, sum of c_x squared differences: $(round(c_x_variable, digits=10))")
+        end
+
     end
 
-    exit(0) # TODO remove this, for the moment it's just used for debugging
+    #exit(0) # TODO remove this, for the moment it's just used for debugging
 end
