@@ -66,7 +66,9 @@ function dcode_loss(tree, dataset::Dataset{T,L}, options::MyOptions)::L where {T
     # obtain all the necessary values and compute c_hat
     T1, B, D = size(x_hat)
     x_hat_long = reshape(x_hat, (T1 * B, D))
-    y_hat_long, flag = eval_tree_array(tree, x_hat_long, options) # TODO understand array shapes
+    # TODO understand array shapes; x_hat_long needs to be transposed, probably
+    y_hat_long, flag = eval_tree_array(tree, x_hat_long', options)
+    # TODO also check the flag, and if it is not True, return a very high value
     y_hat = reshape(y_hat_long, (T1, B))
     c_hat = (y_hat .* weight)' * g
 
