@@ -1,7 +1,10 @@
 # full test of SymbolicRegression.jl with the new fitness function and the new options
 
 # imports
+using Base.Filesystem # create directories and such
+using Dates # manage dates
 using JSON
+using Logging # for logging
 using SymPy
 
 import SymbolicRegression: Dataset, Options, calculate_pareto_frontier, equation_search, tree, eval_tree_array
@@ -13,11 +16,21 @@ using .Basis
 
 # hard-coded values
 odebench_file_name = "data/odebench/all_odebench_trajectories.json" # working directory is the main repo folder, for some reason
-n_basis = 10
+output_folder = "local_results/julia-experiments"
+n_basis = 50
 basis = Basis.FourierBasis
 niterations = 40
 
-println("Preparing structures and functions...")
+# first, let's create the output directory
+timestamp = Dates.format(now(), "yyyy-mm-dd-HH-MM-SS")
+output_folder = joinpath(output_folder, timestamp * "-julia-experiments") # string concatenation in Julia uses '*'
+mkpath(output_folder)
+
+# then, start the log file
+logger = SimpleLogger(open(joinpath(output_folder, "log.txt"), "w"))
+global_logger(logger)
+
+@info("Preparing structures and functions...")
 # all this block creates the MyNewOptions structure, and a merged structure MyOptions with the previous SymbolicRegression.Options
 Base.@kwdef struct MyNewOptions
     c::Array{Float64} = nothing
@@ -63,12 +76,28 @@ function dcode_loss(tree, dataset::Dataset{T,L}, options::MyOptions)::L where {T
     x_hat = options.x_hat
     weight = options.weight
 
-    # obtain all the necessary values and compute c_hat
+    # obtain all the necessary values and compute c_hat!
+    # the first step is to obtain y_hat, which is the predicted value for x_hat
     T1, B, D = size(x_hat)
     x_hat_long = reshape(x_hat, (T1 * B, D))
-    # TODO understand array shapes; x_hat_long needs to be transposed, probably
-    y_hat_long, flag = eval_tree_array(tree, x_hat_long', options)
-    # TODO also check the flag, and if it is not True, return a very high value
+    
+    # we need to use the try/catch block because the evaluation of the tree can raise exceptions
+    flag = true
+    y_hat_long = nothing
+    try
+        # x_hat_long needs to be transposed, because eval_tree_array expects a shape (n_features, n_samples)
+        y_hat_long, flag = eval_tree_array(tree, x_hat_long', options)
+    catch e
+        @error("Unhandled exception during tree evaluation: \"$e\"")
+        flag = false
+    end
+
+    # flag == false means that something went wrong during the evaluation of the tree,
+    # so very likely the fitness is NaN or infinite
+    if flag == false
+        return L(Inf)
+    end
+    
     y_hat = reshape(y_hat_long, (T1, B))
     c_hat = (y_hat .* weight)' * g
 
@@ -76,22 +105,22 @@ function dcode_loss(tree, dataset::Dataset{T,L}, options::MyOptions)::L where {T
     sample_weight = ones(size(c))
     c_x_fitness_value = sum((c + c_hat) .^ 2 .* sample_weight) / sum(sample_weight)
 
-    return c_x_fitness_value
+    return L(c_x_fitness_value)
 end
 
 # first, we are going to read some data
-println("Starting script! The working directory is:", pwd())
-println("Loading file \"$odebench_file_name\"...")
+@info("Starting script! The working directory is:", pwd())
+@info("Loading file \"$odebench_file_name\"...")
 odebench = JSON.parsefile(odebench_file_name)
 
 # next, we iterate over the different systems in odebench
 for system in odebench
     system_id = system["id"]
-    println("Now working on system $system_id...")
+    @info("Now working on system $system_id...")
 
     # detect state variables, get related equations in symbolic format
     state_variables = [m.captures[1] for m in eachmatch(r"([0-9a-z_]+):\s+", system["var_description"])]
-    println("State variables: $state_variables")
+    @info("State variables: $state_variables")
 
     equations = Dict(
         state_variables[i] => sympify(system["substituted"][1][i]) # array indexing begins at 1
@@ -127,10 +156,10 @@ for system in odebench
         time_array[:, trajectory_index] .= trajectory["t"]
     end
     
-    println("Found $(size(trajectories_array, 2)) trajectories, stored in a $(size(trajectories_array)) array")
+    @info("Found $(size(trajectories_array, 2)) trajectories, stored in a $(size(trajectories_array)) array")
 
     # here below, we proceed to the computation of c_x
-    println("Preparing the computation of c_x...")
+    @info("Preparing the computation of c_x...")
     T = time_array[end, 1]
     t_new = time_array[:, 1]
 
@@ -173,10 +202,12 @@ for system in odebench
         y = zeros(150)
 
         # run the search
-        println("Running Symbolic Regression...")
+        @info("Running Symbolic Regression...")
         hall_of_fame = equation_search(
             X, y, niterations=niterations, options=options,
         )
+
+        @info("Final hall of fame: $hall_of_fame")
     end
 
     # TODO remove this, it's just for debugging
