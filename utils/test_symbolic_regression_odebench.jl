@@ -128,7 +128,7 @@ for system in odebench
     )
 
     for (var, eq) in equations
-        println("\t$var : $eq")
+        @info("\t$var : $eq")
     end
 
     # get the trajectories
@@ -181,6 +181,10 @@ for system in odebench
         Xi = trajectories_array[:, :, variable_index]
         c = (Xi .* weight)' * g_dot
 
+        # create the output directory for this system and variable
+        variable_folder = joinpath(output_folder, "system-$system_id-$state_variable")
+        mkpath(variable_folder)
+
         # set up the options for SymbolicRegression.jl
         options = MyOptions(
             c = c,
@@ -191,7 +195,8 @@ for system in odebench
             binary_operators=[+, -, *, /],
             unary_operators=[sin, cos, exp, log],
             populations=20,
-            loss_function = dcode_loss
+            loss_function = dcode_loss,
+            output_directory = variable_folder
         )
         #println("Trying to access options field: $(options.c)")
         
@@ -204,12 +209,18 @@ for system in odebench
         # run the search
         @info("Running Symbolic Regression...")
         hall_of_fame = equation_search(
-            X, y, niterations=niterations, options=options,
+            X, y, 
+            niterations=niterations,
+            variable_names=String.(state_variables), # this is necessary to convert SubString into String
+            y_variable_names=String.(state_variable), # again, same as above
+            options=options,
         )
 
         @info("Final hall of fame: $hall_of_fame")
     end
 
-    # TODO remove this, it's just for debugging
-    exit(0)
+    # TODO comment/remove this, it's just for debugging
+    #if system_id == 2
+    #    exit(0)
+    #end
 end
