@@ -27,7 +27,9 @@ python create_table_from_experiments.py
 ```
 
 ### Deceptive search spaces for symbolic regression
-Even though the performance of the ground truth equation might be poor, this would not be a problem for a symbolic regression algorithm, _iff_ the ground truth still represents a global optimum in the search space (at least for a certain level of complexity). However, this is not true: the following experiments show that even a state-of-the-art symbolic regression approach like `PySR` (https://github.com/MilesCranmer/PySR) finds equations with complexity equal or close to the ground truth, but higher performance in the new search space.
+Even though the performance of the ground truth equation might be poor, this would not be a problem for a symbolic regression algorithm, _iff_ the ground truth still represents a global optimum in the search space (at least for a certain level of complexity, defined as size of the tree).  
+
+However, this is not true: the following experiments show that even a state-of-the-art symbolic regression approach like `PySR` (https://github.com/MilesCranmer/PySR) finds equations with complexity equal or close to the ground truth, but higher performance in the new search space.
 
 ## Publications
 TONDA A., ZHANG H., CHEN Q., XUE B., ZHANG M., LUTTON E. 2025. When Data Transformations Mislead Symbolic Regression: Deceptive Search Spaces in System Identification, In: Workshop on Symbolic Regression, proceedings of the annual conference on Genetic and evolutionary computation (GECCO) 2025 companion, DOI: 10.1145/3712255.3734301  
