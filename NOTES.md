@@ -36,3 +36,8 @@ There is a problem somewhere in the $f(x, t) -> F_x(x, t, delta_t)$ conversion. 
 2. There is a mathematical issue with the original formula. Maybe something related to how constants gets transformed in the other feature space?
 
 To be explored, because this is an issue for *both* chaotic and non-chaotic systems.
+
+## Old notes
+This is a refactoring of the Symbolic Regression for systems of Ordinary Differential Equations project.
+
+The original repository is here: https://github.com/albertotonda/eureqa-differential-equations
