@@ -195,8 +195,8 @@ for system in odebench
             binary_operators=[+, -, *, /],
             unary_operators=[sin, cos, exp, log],
             populations=20,
-            loss_function = dcode_loss,
-            output_directory = variable_folder
+            loss_function = dcode_loss, # our hand-written loss function
+            output_directory = variable_folder # folder freshly created for the system
         )
         #println("Trying to access options field: $(options.c)")
         
