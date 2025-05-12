@@ -337,13 +337,20 @@ def compare_data_transformations(equations, dictionary_trajectory, trajectory_na
                 data_transformations[key] = arguments
     
     # TODO remove this, it's a horrible temporary hack
-    data_transformations = {
-        'C_x' : {'function' : apply_dcode_method, 
-                 'kwargs' : {'n_basis' : 50, }},
-        'C_x_smoothed_w15' : {'function' : apply_dcode_method,
-                              'kwargs' : {'n_basis' : 50,
-                              'smoothing' : {'window_length' : 15}}}, 
-    }
+    if False :
+        data_transformations = {
+            'C_x' : {'function' : apply_dcode_method, 
+                     'kwargs' : {'n_basis' : 50, }},
+            'C_x_smoothed_w15' : {'function' : apply_dcode_method,
+                                  'kwargs' : {'n_basis' : 50,
+                                  'smoothing' : {'window_length' : 15}}}, 
+        }
+        
+    data_transformations['C_x'] = {'function' : apply_dcode_method, 
+                                   'kwargs' : {'n_basis' : 50, }}
+    data_transformations['C_x_smoothed_w15'] = {'function' : apply_dcode_method,
+                          'kwargs' : {'n_basis' : 50,
+                          'smoothing' : {'window_length' : 15}}}
     
     state_variables = [k for k in dictionary_trajectory if k != 't']
     t = dictionary_trajectory['t']
