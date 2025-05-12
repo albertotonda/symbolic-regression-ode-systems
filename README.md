@@ -1,9 +1,9 @@
 # Learning systems of Ordinary Differential Equations using standard Symbolic Regression
 
 This repository contains the code and data for a series of works on learning ODE systems (system identification) using symbolic regression. Employing classical symbolic regression on dynamical systems requires applying a data transformation to the trajectory/time series data. Three different data transformations have been proposed in literature:
-1. $\Delta_x$
-2. $F_x$
-3. $\mathcal{C}_x$
+1. $\Delta_x$, introduced in the seminal 1994 [Genetic Programming book](https://mitpress.mit.edu/9780262527910/genetic-programming/)
+2. $F_x$, introduced in the 2014 paper [Learning Dynamical Systems Using Standard Symbolic Regression](https://link.springer.com/chapter/10.1007/978-3-662-44303-3_3)
+3. $\mathcal{C}_x$, an approach which also significantly modifies the fitness function, presented in the 2022 paper [D-CODE: Discovering Closed-form ODEs from Observed Trajectories](https://par.nsf.gov/servlets/purl/10357448)
 
 ## Testing data transformation approaches
 The results reported in the publications below can be reproduced running scripts in Python and Julia. To run the experiments, you will first need to check out the repository using Git, or download it as a .zip file to then unzip it to a folder.
