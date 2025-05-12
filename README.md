@@ -20,7 +20,11 @@ python check_odebench_all_transformations.py
 
 The results will be saved to a directory named `/local_results/check_odebench_all_transformations` from the root of the local copy of the repository. The directory includes a subdirectory for each test ODE system contained in the ODEBench benchmark suite (63 different test ODE systems at the time of writing). Each subdirectory will include several files, one for each trajectory, each level on added noise, each data transformation, and each combination of hyperparameters for the data transformation.  
 
-The ground truth equations for each ODE systems will then be compared against each trajectory transformed with the three data transformations. The results will be summarized in a CSV table called `summary.csv`.
+The ground truth equations for each ODE systems will then be compared against each trajectory transformed with the three data transformations. To summarize the results in a CSV table called `/local_results/check_odebench_all_transformations/summary.csv`, you will have to run the other script:
+
+```
+python create_table_from_experiments.py
+```
 
 ## Publications
 TONDA A., ZHANG H., CHEN Q., XUE B., ZHANG M., LUTTON E. 2025. When Data Transformations Mislead Symbolic Regression: Deceptive Search Spaces in System Identification, In: Workshop on Symbolic Regression, proceedings of the annual conference on Genetic and evolutionary computation (GECCO) 2025 companion, DOI: 10.1145/3712255.3734301  
