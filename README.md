@@ -1,9 +1,9 @@
 # Learning systems of Ordinary Differential Equations using standard Symbolic Regression
 
 This repository contains the code and data for a series of works on learning ODE systems (system identification) using symbolic regression. Employing classical symbolic regression on dynamical systems requires applying a data transformation to the trajectory/time series data. Three different data transformations have been proposed in literature:
-1. $\Delta_x$, introduced in the seminal 1994 [Genetic Programming book](https://mitpress.mit.edu/9780262527910/genetic-programming/)
-2. $F_x$, introduced in the 2014 paper [Learning Dynamical Systems Using Standard Symbolic Regression](https://link.springer.com/chapter/10.1007/978-3-662-44303-3_3)
-3. $\mathcal{C}_x$, an approach which also significantly modifies the fitness function, presented in the 2022 paper [D-CODE: Discovering Closed-form ODEs from Observed Trajectories](https://par.nsf.gov/servlets/purl/10357448)
+1. $\Delta_x$ introduced in the seminal 1994 [Genetic Programming book](https://mitpress.mit.edu/9780262527910/genetic-programming/)
+2. $F_x$ introduced in the 2014 paper [Learning Dynamical Systems Using Standard Symbolic Regression](https://link.springer.com/chapter/10.1007/978-3-662-44303-3_3)
+3. $\mathcal{C}_x$ an approach which also significantly modifies the fitness function, presented in the 2022 paper [D-CODE: Discovering Closed-form ODEs from Observed Trajectories](https://par.nsf.gov/servlets/purl/10357448)
 
 ## Testing data transformation approaches
 The results reported in the publications below can be reproduced running scripts in Python and Julia. To run the experiments, you will first need to check out the repository using Git, or download it as a .zip file to then unzip it to a folder.
@@ -23,13 +23,29 @@ The results will be saved to a directory named `/local_results/check_odebench_al
 The ground truth equations for each ODE systems will then be compared against each trajectory transformed with the three data transformations. To summarize the results in a CSV table called `/local_results/check_odebench_all_transformations/summary.csv`, you will have to run the other script:
 
 ```
+cd utils
 python create_table_from_experiments.py
 ```
 
 ### 2. Deceptive search spaces for symbolic regression
 Even though the performance of the ground truth equation might be poor, this would not be a problem for a symbolic regression algorithm, _iff_ the ground truth still represents a global optimum in the search space (at least for a certain level of complexity, defined as size of the tree).  
 
-However, this is not true: the following experiments show that even a state-of-the-art symbolic regression approach like `PySR` (https://github.com/MilesCranmer/PySR) finds equations with complexity equal or close to the ground truth, but higher performance in the new search space.
+However, this is not true: the following experiments show that even a state-of-the-art symbolic regression approach like `PySR` (https://github.com/MilesCranmer/PySR) finds equations with complexity equal or close to the ground truth, but higher performance in the new search space.  
+
+With all the transformed trajectory data generated in step 1, it is now possible to run `PySR` in these search spaces. For $\Delta_x$ and $F_x$, `PySR` is called through its Python interface, running the script:
+
+```
+cd utils
+python run_pysr_on_different_approximations.py
+```
+
+As implementing $\mathcal{C}_x$ required significant modifications to the fitness function, it was necessary to directly work with the Julia code underlying the Python `PySR` interface. For this reason, a separate Julia script was implemented:
+
+```
+cd utils
+julia test_dcode_fitness_function.jl
+```
+
 
 ## Publications
 TONDA A., ZHANG H., CHEN Q., XUE B., ZHANG M., LUTTON E. 2025. When Data Transformations Mislead Symbolic Regression: Deceptive Search Spaces in System Identification, In: Workshop on Symbolic Regression, proceedings of the annual conference on Genetic and evolutionary computation (GECCO) 2025 companion, DOI: 10.1145/3712255.3734301  
