@@ -43,7 +43,7 @@ As implementing $\mathcal{C}_x$ required significant modifications to the fitnes
 
 ```
 cd utils
-julia test_dcode_fitness_function.jl
+julia test_symbolic_regression_odebench.jl
 ```
 
 

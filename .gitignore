@@ -25,3 +25,5 @@ utils/..tex
 /figures
 /src/dcode/__pycache__
 /outputs
+utils/figures_animation.py
+.gitignore

@@ -11,6 +11,7 @@ import json
 import os
 import pandas as pd
 import re as regex
+import sys
 
 from sklearn.metrics import mean_squared_error, r2_score
 
@@ -68,15 +69,27 @@ if __name__ == "__main__" :
                 df = pd.read_csv(csv_file)
                 
                 ground_truth_variables = [c for c in df.columns 
-                                          if c.find("pred") == -1 and c != 't'
+                                          if c.find("pred") == -1 
+                                          and c.find("_x_hat") == -1 
+                                          and c != 't'
                                           and c != 'delta_t'
                                           and (c.find("deltax") != -1 or c.find("F_x") != -1)]
-                
+                     
                 # for each ground truth variable, compute R2 and store a row
                 # inside the results dictionary
                 for v in ground_truth_variables :
+                    # ground truth values
                     ground_truth = df[v].values
-                    predicted = df[v + "_pred"].values
+                    # now, the predicted values in the transformed space can have
+                    # two different names; either with _pred, or with _x_hat
+                    key_prediction = v + "_pred"
+                    if key_prediction not in df.columns :
+                        key_prediction = v + "_x_hat"
+                        if key_prediction not in df.columns :
+                            print("Error! Key for predicted values not found!")
+                            sys.exit(0)
+                    
+                    predicted = df[key_prediction].values
                     metric_value = metric_function(ground_truth, predicted)
                     results[column_name].append(metric_value)
                     
@@ -88,7 +101,19 @@ if __name__ == "__main__" :
                         results['system_id'].append(system_id)
                         results['trajectory_id'].append(trajectory_id)
                         results['variable'].append(original_variable)
-                        
-    print(results)
+    
+    # due to differences in the transformations, some of the keys might be empty
+    # so we should prune them
+    print("Pruning empty keys...")
+    keys_to_be_removed = []
+    for key, value in results.items() :
+        print("Key \"%s\" has length %d" % (key, len(value)))
+        
+        if len(value) == 0 :
+            keys_to_be_removed.append(key)
+            
+    for key in keys_to_be_removed :
+        results.pop(key, None)
+        
     df_results = pd.DataFrame.from_dict(results)
     df_results.to_csv(output_file_name, index=False)
