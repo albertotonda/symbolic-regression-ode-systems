@@ -27,3 +27,4 @@ utils/..tex
 /outputs
 utils/figures_animation.py
 .gitignore
+/.ipynb_checkpoints
