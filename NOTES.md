@@ -5,7 +5,7 @@ b. If they make different mistakes in different points, use the three data trans
 c. It would also be nice to compare against a completely explicit system identification for SR approach, with complex genomes and fitness solving for initial conditions + compare against data.
 
 ## State of the repository
-Unfortunately, now most of the code is inside the `\utils` folder.
+Unfortunately, now most of the code is inside the `\utils` folder. The code should be drastically reorganized.
 
 ## TODO
 The code for C_x is now running. So, the next steps are:
