@@ -1,26 +1,16 @@
 # DEVELOPMENT NOTES
-I need several scripts and functions:
-1. One that reads a .txt (or better, json) file with a system of differential equations, plus initial conditions, and generates data (see src/createDataset/createDataset.py).
-2. One that transforms the dataset by using the 'trick' in the paper, the approximate Eulerian form (see src/createDeltat/createDeltat.py).
-3. Run separate instances of pySR on each equation, obtaining several Pareto fronts of candidate solutions.
-4. Pair equations found by pySR, converting them back to their original dx/dt format (ODE systems).
-5. Identify parameters inside the ODE systems, and optimize them using CMA-ES against the original data.
-6. Return the best ODE system.
+The general idea is:
+a. First compare the data transformations on all data sets in ODEBench.
+b. If they make different mistakes in different points, use the three data transformations as three different objectives for a multi-objective approach.
+c. It would also be nice to compare against a completely explicit system identification for SR approach, with complex genomes and fitness solving for initial conditions + compare against data.
 
-Currently, functions #1-#4 are complete. The code for function #5 is probably almost ready, but something needs to be re-thought to better pre-select the candidate systems. And also find a way to evaluate the candidates that is more informative that just R2 or MSE.
-
-Ideally, a lot of experiments can be run, changing:
-- noise applied to the data
-- regular/irregular sampling
+## State of the repository
+Unfortunately, now most of the code is inside the `\utils` folder.
 
 ## TODO
-- Also store the random seeds for each experiment.
-- perform a cross-validation, select only equations with recurring structure that appear in the Pareto fronts
-- What kind of modified fitness function (based on error) could be used for giving more importance to the beginning of the dynamic? Check the publication "Correlation versus RMSE loss functions in symbolic regression tasks"
-- More generally, let's say that I have two candidate systems that are both making errors on a dynamic; which one is the 'best' one? Using an aggregate measure like R2 just 
-- Some papers on evaluating similarity between ODE systems: 
-	- "Similarity Between Two Stochastic Differential Systems"
-	- "A General Metric for the Similarity of Both Stochastic and Deterministic System Dynamics"
+The code for C_x is now running. So, the next steps are:
+a. Run PySR and check whether we find wrong equations with better performance for the "problematic" systems.
+b. Check what happens on ground truth equations with noisy data (+ smoothing).
 
 ## 2024-11-21
 Now, the next steps for the base comparison between different data transformation is:
